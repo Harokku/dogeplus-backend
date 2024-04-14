@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/gofiber/fiber/v3/log"
+	"github.com/gofiber/fiber/v2/log"
 	"os"
 )
 
@@ -12,7 +12,7 @@ import (
 // and the value being the corresponding value for that variable.
 // This struct is used to store the configuration values that are read from a configuration file.
 type Config struct {
-	Variable map[string]string `toml:"variable"`
+	Variable map[string]interface{} `toml:"variables"`
 }
 
 type EnvVars string
@@ -81,5 +81,5 @@ func GetEnvWithFallback(config Config, key EnvVars) string {
 		value = os.Getenv(string(key))
 	}
 
-	return value
+	return fmt.Sprintf("%v", value)
 }

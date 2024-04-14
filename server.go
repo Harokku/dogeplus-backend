@@ -1,16 +1,15 @@
 package main
 
-import "github.com/gofiber/fiber/v3"
+import "dogeplus-backend/router"
 
 func main() {
 	// load env vars
 	config := LoadConfig()
 
-	var app *fiber.App
+	// define new fiber app and initialize router
+	app := router.NewFiberApp()
+	router.SetupRoutes(app)
 
 	// Start server listener loop
-	err := app.Listen(GetEnvWithFallback(config, Port))
-	if err != nil {
-		return
-	}
+	app.Listen(":" + GetEnvWithFallback(config, Port))
 }
