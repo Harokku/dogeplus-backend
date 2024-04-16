@@ -1,10 +1,12 @@
-package main
+package config
 
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/gofiber/fiber/v2/log"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // Config is a struct that defines the configuration for the application.
@@ -19,12 +21,14 @@ type EnvVars string
 
 // Port is a constant representing the environment variable name .
 const (
-	Port = "PORT"
+	Port   = "PORT"
+	DbFile = "DBFILE"
 )
 
 // EnvVarsSlice is a slice of the EnvVars type, representing a collection of environment variables.
 var EnvVarsSlice = []EnvVars{
 	Port,
+	DbFile,
 }
 
 // checkAllEnvVars checks if all environment variables specified in EnvVarsSlice are set.
@@ -82,4 +86,30 @@ func GetEnvWithFallback(config Config, key EnvVars) string {
 	}
 
 	return fmt.Sprintf("%v", value)
+}
+
+// SanitizeFilePath checks if the given path is an absolute path and does not contain any parent directory traversals.
+// It returns an error if the path is not absolute or contains "..".
+// Additionally, it checks if the file at the given path exists. If the file does not exist, an error is returned.
+// The error message contains the path that failed the check.
+// This function relies on the filepath.IsAbs and os.Stat functions.
+func SanitizeFilePath(path string) error {
+	// check if path is absolute and don't traverse root
+	if !filepath.IsAbs(path) || strings.Contains(path, "..") {
+		return fmt.Errorf(`"%s" is not an absolute path`, path)
+	}
+
+	// check if file exist
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf(`"%s" does not exist`, path)
+	}
+
+	// check if program have sufficient permission ti access the file
+	file, err := os.Open(path)
+	defer file.Close()
+	if err != nil {
+		return fmt.Errorf(`"%s" cannot open file: %s`, path, err)
+	}
+
+	return nil
 }
