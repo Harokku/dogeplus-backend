@@ -93,6 +93,8 @@ func createTables(db *sql.DB) error {
 			status TEXT CHECK ( status IN ('notdone','working','done')), 
 			modified_by TEXT, 
 			timestamp TEXT)`,
+		// Indexes for active events table
+		`CREATE INDEX idx_active_events_central_id ON active_events(central_id)`,
 		// Trigger for active events table
 		`CREATE TRIGGER IF NOT EXISTS update_timestamp
 			BEFORE UPDATE OF status, modified_by ON active_events
