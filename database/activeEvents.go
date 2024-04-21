@@ -45,8 +45,12 @@ type ActiveEventsRepository struct {
 
 // NewActiveEventRepository creates a new instance of ActiveEventsRepository with the provided database connection.
 // It returns a pointer to the created ActiveEventsRepository.
-func NewActiveEventRepository(db *sql.DB) *ActiveEventsRepository {
-	return &ActiveEventsRepository{db: db}
+func NewActiveEventRepository(db *sql.DB, eventNumber int, centralId string) *ActiveEventsRepository {
+	return &ActiveEventsRepository{
+		db:          db,
+		eventNumber: eventNumber,
+		centrailId:  centralId,
+	}
 }
 
 // Add inserts a new active event record into the database.
@@ -55,10 +59,12 @@ func NewActiveEventRepository(db *sql.DB) *ActiveEventsRepository {
 // This method executes a database query to insert the provided active event data into the active_events table.
 // It returns an error if the database operation fails.
 func (e *ActiveEventsRepository) Add(tx *sql.Tx, task ActiveEvents) error {
-	query := `INSERT INTO active_events (UUID, event_number , event_date, central_id, Priority, Title, Description, Role, Status,modified_by, Timestamp)
+	query := `INSERT INTO active_events (UUID, event_number , event_date, central_id, Priority, Title, Description, 
+				Role, Status,modified_by, Timestamp)
 			   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := tx.Exec(query, task.UUID, task.EventNumber, task.EventDate, task.CentralID, task.Priority, task.Title, task.Description, task.Role, task.Status, task.ModifiedBy, task.Timestamp)
+	_, err := tx.Exec(query, task.UUID, task.EventNumber, task.EventDate, task.CentralID, task.Priority, task.Title,
+		task.Description, task.Role, task.Status, task.ModifiedBy, task.Timestamp)
 
 	return err
 }

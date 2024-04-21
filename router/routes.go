@@ -17,4 +17,8 @@ func SetupRoutes(app *fiber.App) {
 		return c.Next()
 	})
 	v1.Get("/", handlers.VersionLandingHandler("version 1"))
+
+	//TODO: Tasks routes
+
+	//TODO: ActiveEvents routes
 }
