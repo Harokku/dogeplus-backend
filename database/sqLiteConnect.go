@@ -85,7 +85,7 @@ func createTables(db *sql.DB) error {
 			uuid TEXT PRIMARY KEY,
 			event_number INTEGER, 
 			event_date TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')), 
-			central_id TEXT CHECK ( status IN ('HQ','SRA','SRL','SRM','SRP')),
+			central_id TEXT CHECK ( central_id IN ('HQ','SRA','SRL','SRM','SRP')),
 			priority INTEGER, 
 			title TEXT,
 			description TEXT,
@@ -94,7 +94,7 @@ func createTables(db *sql.DB) error {
 			modified_by TEXT, 
 			timestamp TEXT)`,
 		// Indexes for active events table
-		`CREATE INDEX idx_active_events_central_id ON active_events(central_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_active_events_central_id ON active_events(central_id)`,
 		// Trigger for active events table
 		`CREATE TRIGGER IF NOT EXISTS update_timestamp
 			BEFORE UPDATE OF status, modified_by ON active_events
@@ -120,4 +120,19 @@ func createTables(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// Repositories represents a collection of different repositories for managing tasks and active events.
+type Repositories struct {
+	Tasks        *TaskRepository
+	ActiveEvents *ActiveEventsRepository
+}
+
+// NewRepositories initializes a new instance of Repositories with the provided *sql.DB object.
+// It returns a pointer to the created Repositories.
+func NewRepositories(db *sql.DB) *Repositories {
+	return &Repositories{
+		Tasks:        NewTaskRepository(db),
+		ActiveEvents: NewActiveEventRepository(db),
+	}
 }

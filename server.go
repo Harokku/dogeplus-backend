@@ -11,15 +11,20 @@ func main() {
 	// load env vars
 	config := serverConfig.LoadConfig()
 
-	// define new fiber app and initialize router
-	app := router.NewFiberApp()
-	router.SetupRoutes(app)
-
-	// Acquire db instance
-	dbconn, err := database.GetInstance(config)
+	// Get db instance
+	db, err := database.GetInstance(config)
 	if err != nil {
-		log.Fatalf("Failed to establish a DB connection: %v", err)
+		log.Fatal(err)
 	}
+
+	// Init db repos
+	repos := database.NewRepositories(db)
+
+	// Init Fiber app
+	app := router.NewFiberApp()
+
+	// Setup routes
+	router.SetupRoutes(app, repos)
 
 	// Start server listener loop
 	app.Listen(":" + serverConfig.GetEnvWithFallback(config, serverConfig.Port))

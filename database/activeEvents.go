@@ -15,6 +15,14 @@ func (e MultipleEventsIdError) Error() string {
 	return fmt.Sprintf("multiple events id: %s", e.Detail)
 }
 
+type NoEventsFoundError struct {
+	Detail string
+}
+
+func (e NoEventsFoundError) Error() string {
+	return fmt.Sprintf("no events found: %s", e.Detail)
+}
+
 // ActiveEvents represents active events with relative properties
 type ActiveEvents struct {
 	UUID        uuid.UUID `json:"uuid"`
@@ -38,18 +46,14 @@ const (
 
 // ActiveEventsRepository represents a repository for managing active events
 type ActiveEventsRepository struct {
-	db          *sql.DB
-	eventNumber int
-	centrailId  string
+	db *sql.DB
 }
 
 // NewActiveEventRepository creates a new instance of ActiveEventsRepository with the provided database connection.
 // It returns a pointer to the created ActiveEventsRepository.
-func NewActiveEventRepository(db *sql.DB, eventNumber int, centralId string) *ActiveEventsRepository {
+func NewActiveEventRepository(db *sql.DB) *ActiveEventsRepository {
 	return &ActiveEventsRepository{
-		db:          db,
-		eventNumber: eventNumber,
-		centrailId:  centralId,
+		db: db,
 	}
 }
 
@@ -74,11 +78,11 @@ func (e *ActiveEventsRepository) Add(tx *sql.Tx, task ActiveEvents) error {
 // the eventNumber and centralId properties from the ActiveEventsRepository,
 // and the priority, title, description, role, and status properties from the Task object.
 // It returns the converted ActiveEvents object.
-func (e *ActiveEventsRepository) TaskToActiveEvent(task Task) ActiveEvents {
+func (e *ActiveEventsRepository) TaskToActiveEvent(task Task, eventNumber int, centralId string) ActiveEvents {
 	return ActiveEvents{
 		UUID:        uuid.New(),
-		EventNumber: e.eventNumber,
-		CentralID:   e.centrailId,
+		EventNumber: eventNumber,
+		CentralID:   centralId,
 		Priority:    task.Priority,
 		Title:       task.Title,
 		Description: task.Description,
@@ -93,7 +97,7 @@ func (e *ActiveEventsRepository) TaskToActiveEvent(task Task) ActiveEvents {
 // and inserts it into the active_events table using the Add method. If any error occurs during this process,
 // the transaction is rolled back and the error is returned. Otherwise, the transaction is committed.
 // It returns an error if the transaction fails to begin, any Add operation fails, or the transaction fails to commit.
-func (e *ActiveEventsRepository) CreateFromTaskList(tasks []Task) error {
+func (e *ActiveEventsRepository) CreateFromTaskList(tasks []Task, eventNumber int, centralId string) (err error) {
 
 	// Begin transaction
 	tx, err := e.db.Begin()
@@ -101,15 +105,24 @@ func (e *ActiveEventsRepository) CreateFromTaskList(tasks []Task) error {
 		return err
 	}
 
+	// Ensure the transaction will be closed before returning
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
+
 	for _, task := range tasks {
-		t := e.TaskToActiveEvent(task)
+		t := e.TaskToActiveEvent(task, eventNumber, centralId)
 		err = e.Add(tx, t)
 		if err != nil {
 			return err
 		}
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // GetByCentralID retrieves active events from the database based on the provided central ID.
@@ -120,9 +133,9 @@ func (e *ActiveEventsRepository) CreateFromTaskList(tasks []Task) error {
 // It returns a slice of ActiveEvents representing the retrieved events,
 // a slice of int representing the unique event numbers found,
 // and an error if the database operation fails.
-func (e *ActiveEventsRepository) GetByCentralID() ([]ActiveEvents, []int, error) {
+func (e *ActiveEventsRepository) GetByCentralID(centralId string) ([]ActiveEvents, []int, error) {
 	rows, err := e.db.Query(`SELECT uuid, event_number, event_date, central_id, priority, title, 
-    description, role, status, modified_by, timestamp FROM active_events WHERE central_id = ?`, e.centrailId)
+    description, role, status, modified_by, timestamp FROM active_events WHERE central_id = ?`, centralId)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -155,12 +168,15 @@ func (e *ActiveEventsRepository) GetByCentralID() ([]ActiveEvents, []int, error)
 		}
 	}
 
-	// Check if more than one eventNumber is found and return the appropriate error with event list
-	if len(eventNumbers) > 1 {
+	// Check number of events found and respond accordingly
+	switch {
+	case len(eventNumbers) == 0:
+		return nil, nil, &NoEventsFoundError{Detail: "No events found for specified centralId"}
+	case len(eventNumbers) > 1:
 		return nil, eventNumbers, &MultipleEventsIdError{Detail: "Multiple events found for specified centralId"}
+	default:
+		return events, eventNumbers, nil
 	}
-
-	return events, eventNumbers, nil
 }
 
 // GetByCentralAndNumber retrieves active events from the database based on the provided central ID and event number.
@@ -168,9 +184,9 @@ func (e *ActiveEventsRepository) GetByCentralID() ([]ActiveEvents, []int, error)
 // with the matching central ID and event number.
 // It returns a slice of ActiveEvents representing the retrieved events
 // and an error if the database operation fails.
-func (e *ActiveEventsRepository) GetByCentralAndNumber() ([]ActiveEvents, error) {
+func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralId string) ([]ActiveEvents, error) {
 	rows, err := e.db.Query(`SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, timestamp
-								FROM active_events WHERE central_id = ? AND event_number = ?`, e.centrailId, e.eventNumber)
+								FROM active_events WHERE central_id = ? AND event_number = ?`, centralId, eventNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -194,40 +210,61 @@ func (e *ActiveEventsRepository) GetByCentralAndNumber() ([]ActiveEvents, error)
 	return events, nil
 }
 
-// UpdateStatus updates the status and modified_by fields of an active event record in the database
-// with the provided UUID. The status parameter represents the new status value,
-// and the modifiedby parameter represents the user who modified the record.
-// This method executes a database query to update the active_events table
-// with the provided parameters using the UUID as the identifier.
-// It returns an error if the database operation fails.
-func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, modifiedby string) error {
-
-	stmt, err := e.db.Prepare("UPDATE active_events SET status = ?, modified_by = ? WHERE uuid = ?")
+// UpdateStatus updates the status of an active event record in the database.
+// The uuid parameter is the UUID of the active event record to update.
+// The status parameter is the new status value to set.
+// The modifiedBy parameter is the username of the user performing the update.
+// This method begins a transaction, executes an UPDATE query to update the status and modified_by columns
+// of the active event record with the matching UUID, and fetches the updated row.
+// If any error occurs during the transaction, the transaction is rolled back and an error is returned.
+// Otherwise, the transaction is committed and the updated active event record is returned.
+// It returns an error if the database transaction fails to begin, the UPDATE query fails,
+// the row fetch fails, or the transaction fails to commit.
+func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, modifiedBy string) (ActiveEvents, error) {
+	// Begin a transaction
+	tx, err := e.db.Begin()
 	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	// execute statement
-	_, err = stmt.Exec(status, modifiedby, uuid)
-	if err != nil {
-		return err
+		return ActiveEvents{}, err
 	}
 
-	return nil
+	// Update the status
+	_, err = tx.Exec("UPDATE active_events SET status = ?, modified_by = ? WHERE uuid = ?", status, modifiedBy, uuid)
+	if err != nil {
+		tx.Rollback()
+		return ActiveEvents{}, err
+	}
+
+	// Fetch the updated row
+	row := tx.QueryRow("SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, timestamp FROM active_events WHERE uuid = ?", uuid)
+
+	var event ActiveEvents
+	err = row.Scan(&event.UUID, &event.EventNumber, &event.EventDate, &event.CentralID, &event.Priority, &event.Title,
+		&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.Timestamp)
+	if err != nil {
+		tx.Rollback()
+		return ActiveEvents{}, err
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		return ActiveEvents{}, err
+	}
+
+	return event, nil
 }
 
 // DeleteEvent deletes an active event record from the database based on the provided central ID and event number.
 // This method executes a database query to delete the active event record from the active_events table
 // with the matching central ID and event number.
 // It returns an error if the database operation fails.
-func (e *ActiveEventsRepository) DeleteEvent() error {
+func (e *ActiveEventsRepository) DeleteEvent(eventNumber int, centralId string) error {
 	stmt, err := e.db.Prepare("DELETE FROM active_events where central_id = ? AND event_number = ?")
 	if err != nil {
 		return err
 	}
 
-	_, err = stmt.Exec(e.centrailId, e.eventNumber)
+	_, err = stmt.Exec(centralId, eventNumber)
 	if err != nil {
 		return err
 	}
