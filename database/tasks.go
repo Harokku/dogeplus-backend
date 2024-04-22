@@ -27,6 +27,37 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
+// GetCategories retrieves distinct categories from the "tasks" table in the database.
+// It does not take any input and returns an array of category strings and an error.
+// A query is executed to select distinct categories from the "tasks" table.
+// The retrieved rows are scanned and each category is appended to the categories array.
+// If any error occurs during the process, it is returned along with the categories array.
+// Finally, the categories array and the error are returned.
+func (t *TaskRepository) GetCategories() ([]string, error) {
+	var categories []string
+
+	rows, err := t.db.Query("SELECT DISTINCT category FROM tasks")
+	if err != nil {
+		return categories, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var category string
+		if err := rows.Scan(&category); err != nil {
+			return nil, err
+		}
+
+		categories = append(categories, category)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return categories, nil
+}
+
 // GetByCategories retrieves tasks based on the provided categories.
 // It takes an array of category strings as input and returns an array of Task objects and an error.
 // For each category, a placeholder is created and an argument is assigned.

@@ -20,9 +20,12 @@ func SetupRoutes(app *fiber.App, repos *database.Repositories) {
 	v1.Get("/", handlers.VersionLandingHandler("version 1"))
 
 	//TODO: Tasks routes
+	tasks := v1.Group("/tasks")
+	tasks.Get("/", handlers.GetTasks(repos))
 
 	//TODO: ActiveEvents routes
-	v1.Post("/active-events", handlers.CreateNewEvent(repos))
-	v1.Get("/active-events", handlers.GetSingleEvent(repos))
-	v1.Put("/active-events", handlers.UpdateEventTask(repos))
+	activeEvents := v1.Group("/active-events")
+	activeEvents.Post("/", handlers.CreateNewEvent(repos))
+	activeEvents.Get("/", handlers.GetSingleEvent(repos))
+	activeEvents.Put("/", handlers.UpdateEventTask(repos))
 }
