@@ -1,12 +1,13 @@
 package router
 
 import (
+	"dogeplus-backend/broadcast"
 	"dogeplus-backend/database"
 	"dogeplus-backend/handlers"
 	"github.com/gofiber/fiber/v2"
 )
 
-func SetupRoutes(app *fiber.App, repos *database.Repositories) {
+func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.ConnectionManager) {
 	app.Get("/", handlers.HomeHandler)
 
 	// api group
@@ -19,13 +20,17 @@ func SetupRoutes(app *fiber.App, repos *database.Repositories) {
 	})
 	v1.Get("/", handlers.VersionLandingHandler("version 1"))
 
-	//TODO: Tasks routes
+	// Tasks routes
 	tasks := v1.Group("/tasks")
 	tasks.Get("/", handlers.GetTasks(repos))
 
-	//TODO: ActiveEvents routes
+	// ActiveEvents routes
 	activeEvents := v1.Group("/active-events")
 	activeEvents.Post("/", handlers.CreateNewEvent(repos))
 	activeEvents.Get("/", handlers.GetSingleEvent(repos))
 	activeEvents.Put("/", handlers.UpdateEventTask(repos))
+
+	// Ws Routes
+	websocket := v1.Group("/ws")
+	websocket.Get("/", handlers.WsUpgrade(cm))
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"dogeplus-backend/broadcast"
 	serverConfig "dogeplus-backend/config"
 	"dogeplus-backend/database"
 	"dogeplus-backend/router"
@@ -20,11 +21,16 @@ func main() {
 	// Init db repos
 	repos := database.NewRepositories(db)
 
+	// Init connection manager for realtime broadcast
+	connectionManager := &broadcast.ConnectionManager{
+		Clients: make(map[broadcast.Broadcaster]bool),
+	}
+
 	// Init Fiber app
 	app := router.NewFiberApp()
 
 	// Setup routes
-	router.SetupRoutes(app, repos)
+	router.SetupRoutes(app, repos, connectionManager)
 
 	// Start server listener loop
 	app.Listen(":" + serverConfig.GetEnvWithFallback(config, serverConfig.Port))
