@@ -7,6 +7,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// SetupRoutes sets up the routes for the application.
+// It takes in the following parameters:
+// - app: a pointer to a fiber.App instance representing the application
+// - repos: a pointer to a database.Repositories instance representing the collection of repositories
+// - cm: a pointer to a broadcast.ConnectionManager instance representing the connection manager
 func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.ConnectionManager) {
 	app.Get("/", handlers.HomeHandler)
 
@@ -32,5 +37,5 @@ func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.Con
 
 	// Ws Routes
 	websocket := v1.Group("/ws")
-	websocket.Get("/", handlers.WsUpgrade(cm))
+	websocket.Get("/", handlers.WsUpgrader(cm), handlers.WsHandler(cm))
 }

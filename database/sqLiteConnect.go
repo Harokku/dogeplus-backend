@@ -84,7 +84,7 @@ func createTables(db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS active_events (
 			uuid TEXT PRIMARY KEY,
 			event_number INTEGER, 
-			event_date TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')), 
+			event_date TEXT NOT NULL,
 			central_id TEXT CHECK ( central_id IN ('HQ','SRA','SRL','SRM','SRP')),
 			priority INTEGER, 
 			title TEXT,
@@ -92,6 +92,7 @@ func createTables(db *sql.DB) error {
 			role TEXT,
 			status TEXT CHECK ( status IN ('notdone','working','done')), 
 			modified_by TEXT, 
+			ip_address TEXT DEFAULT '0.0.0.0',
 			timestamp TEXT)`,
 		// Indexes for active events table
 		`CREATE INDEX IF NOT EXISTS idx_active_events_central_id ON active_events(central_id)`,

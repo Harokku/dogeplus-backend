@@ -17,6 +17,7 @@ type updateEventRequest struct {
 	UUID       uuid.UUID `json:"uuid"`
 	Status     string    `json:"status"`
 	ModifiedBy string    `json:"modified_by"`
+	IpAddress  string    `json:"ip_address"`
 }
 
 // CreateNewEvent is a handler function that creates a new event based on the provided categories, event number, and central ID.
@@ -130,6 +131,7 @@ func GetSingleEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	}
 }
 
+// TODO: Implement broadcast call
 func UpdateEventTask(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body updateEventRequest
@@ -140,23 +142,32 @@ func UpdateEventTask(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 		}
 
+		// Check if uuid is nil
 		if body.UUID == uuid.Nil {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: UUID field should not be empty")
 		}
 
+		// Check if status is nil
 		if body.Status == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: Status field should not be empty")
 		}
 
+		//check in Modifed by is nil
 		if body.ModifiedBy == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: ModifiedBy field should not be empty")
 		}
 
-		updatedTask, err := repos.ActiveEvents.UpdateStatus(body.UUID, body.Status, body.ModifiedBy)
+		// Retrieve client's ip, overwrite eventual passed in value
+		body.IpAddress = ctx.IP()
+
+		// Actually update the event in db
+		updatedTask, err := repos.ActiveEvents.UpdateStatus(body.UUID, body.Status, body.IpAddress, body.ModifiedBy)
 		if err != nil {
 			log.Errorf("Error updating event task: %s\n", err)
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update event task")
 		}
+
+		// TODO: Implement broadcast to all clients
 
 		return ctx.JSON(fiber.Map{
 			"Result": "Event Task Updated",

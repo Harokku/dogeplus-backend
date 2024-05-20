@@ -35,6 +35,7 @@ type ActiveEvents struct {
 	Role        string    `json:"role"`
 	Status      string    `json:"status"`
 	ModifiedBy  string    `json:"modified_by"`
+	IpAddress   string    `json:"ip_address"`
 	Timestamp   time.Time `json:"timestamp"`
 }
 
@@ -64,11 +65,11 @@ func NewActiveEventRepository(db *sql.DB) *ActiveEventsRepository {
 // It returns an error if the database operation fails.
 func (e *ActiveEventsRepository) Add(tx *sql.Tx, task ActiveEvents) error {
 	query := `INSERT INTO active_events (UUID, event_number , event_date, central_id, Priority, Title, Description, 
-				Role, Status,modified_by, Timestamp)
-			   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+				Role, Status,modified_by,ip_address, Timestamp)
+			   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`
 
 	_, err := tx.Exec(query, task.UUID, task.EventNumber, task.EventDate, task.CentralID, task.Priority, task.Title,
-		task.Description, task.Role, task.Status, task.ModifiedBy, task.Timestamp)
+		task.Description, task.Role, task.Status, task.ModifiedBy, task.IpAddress, task.Timestamp)
 
 	return err
 }
@@ -82,12 +83,14 @@ func (e *ActiveEventsRepository) TaskToActiveEvent(task Task, eventNumber int, c
 	return ActiveEvents{
 		UUID:        uuid.New(),
 		EventNumber: eventNumber,
+		EventDate:   time.Now(),
 		CentralID:   centralId,
 		Priority:    task.Priority,
 		Title:       task.Title,
 		Description: task.Description,
 		Role:        task.Role,
 		Status:      TaskNotdone,
+		Timestamp:   time.Now(),
 	}
 }
 
@@ -135,7 +138,7 @@ func (e *ActiveEventsRepository) CreateFromTaskList(tasks []Task, eventNumber in
 // and an error if the database operation fails.
 func (e *ActiveEventsRepository) GetByCentralID(centralId string) ([]ActiveEvents, []int, error) {
 	rows, err := e.db.Query(`SELECT uuid, event_number, event_date, central_id, priority, title, 
-    description, role, status, modified_by, timestamp FROM active_events WHERE central_id = ?`, centralId)
+    description, role, status, modified_by, ip_address, timestamp FROM active_events WHERE central_id = ?`, centralId)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -143,14 +146,30 @@ func (e *ActiveEventsRepository) GetByCentralID(centralId string) ([]ActiveEvent
 
 	events := []ActiveEvents{}
 	eventNumbers := []int{}
+	layout := "2006-01-02 15:04:05.999999-07:00"
 
 	// Scan row to return slice and count unique event numbers
 	for rows.Next() {
+		var tmpEventDate string // event date as string to be scanned to before parsing
+		var tmpTimestamp string // timestamp as string to be scanned to before parsing
 		var event ActiveEvents
-		if err := rows.Scan(event.UUID, event.EventNumber, event.EventDate, event.CentralID, event.Priority, event.Title,
-			event.Description, event.Role, event.Status, event.ModifiedBy, event.Timestamp); err != nil {
+		if err := rows.Scan(&event.UUID, &event.EventNumber, &tmpEventDate, &event.CentralID, &event.Priority, &event.Title,
+			&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp); err != nil {
 			return nil, nil, err
 		}
+		// parse time to actual type
+		parsedEventDate, err := time.Parse(layout, tmpEventDate)
+		if err != nil {
+			return nil, nil, err
+		}
+		parsedTimestamp, err := time.Parse(layout, tmpTimestamp)
+		if err != nil {
+			return nil, nil, err
+		}
+		event.EventDate = parsedEventDate
+		event.Timestamp = parsedTimestamp
+
+		// Append event to slice
 		events = append(events, event)
 
 		// Check if event number already exist in slice
@@ -185,7 +204,7 @@ func (e *ActiveEventsRepository) GetByCentralID(centralId string) ([]ActiveEvent
 // It returns a slice of ActiveEvents representing the retrieved events
 // and an error if the database operation fails.
 func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralId string) ([]ActiveEvents, error) {
-	rows, err := e.db.Query(`SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, timestamp
+	rows, err := e.db.Query(`SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, ip_address, timestamp
 								FROM active_events WHERE central_id = ? AND event_number = ?`, centralId, eventNumber)
 	if err != nil {
 		return nil, err
@@ -197,7 +216,7 @@ func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralI
 	for rows.Next() {
 		var event ActiveEvents
 		if err := rows.Scan(&event.UUID, &event.EventNumber, &event.EventDate, &event.CentralID, &event.Priority,
-			&event.Title, &event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.Timestamp); err != nil {
+			&event.Title, &event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &event.Timestamp); err != nil {
 			return nil, err
 		}
 		events = append(events, event)
@@ -220,7 +239,7 @@ func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralI
 // Otherwise, the transaction is committed and the updated active event record is returned.
 // It returns an error if the database transaction fails to begin, the UPDATE query fails,
 // the row fetch fails, or the transaction fails to commit.
-func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, modifiedBy string) (ActiveEvents, error) {
+func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, modifiedBy string, ipAddress string) (ActiveEvents, error) {
 	// Begin a transaction
 	tx, err := e.db.Begin()
 	if err != nil {
@@ -228,18 +247,18 @@ func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, mod
 	}
 
 	// Update the status
-	_, err = tx.Exec("UPDATE active_events SET status = ?, modified_by = ? WHERE uuid = ?", status, modifiedBy, uuid)
+	_, err = tx.Exec("UPDATE active_events SET status = ?, modified_by = ?, ip_address=? WHERE uuid = ?", status, modifiedBy, ipAddress, uuid)
 	if err != nil {
 		tx.Rollback()
 		return ActiveEvents{}, err
 	}
 
 	// Fetch the updated row
-	row := tx.QueryRow("SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, timestamp FROM active_events WHERE uuid = ?", uuid)
+	row := tx.QueryRow("SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, ip_address, timestamp FROM active_events WHERE uuid = ?", uuid)
 
 	var event ActiveEvents
 	err = row.Scan(&event.UUID, &event.EventNumber, &event.EventDate, &event.CentralID, &event.Priority, &event.Title,
-		&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.Timestamp)
+		&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &event.Timestamp)
 	if err != nil {
 		tx.Rollback()
 		return ActiveEvents{}, err
