@@ -34,6 +34,7 @@ func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.Con
 	activeEvents.Post("/", handlers.CreateNewEvent(repos))
 	activeEvents.Get("/", handlers.GetSingleEvent(repos))
 	activeEvents.Put("/", handlers.UpdateEventTask(repos))
+	activeEvents.Get("/:eventNumber", handlers.GetSpecificEvent(repos))
 
 	// Ws Routes
 	websocket := v1.Group("/ws")

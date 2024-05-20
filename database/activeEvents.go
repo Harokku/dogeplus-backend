@@ -212,13 +212,29 @@ func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralI
 	defer rows.Close()
 
 	events := []ActiveEvents{}
+	layout := "2006-01-02 15:04:05.999999-07:00"
 
 	for rows.Next() {
+		var tmpEventDate string // event date as string to be scanned to before parsing
+		var tmpTimestamp string // timestamp as string to be scanned to before parsing
 		var event ActiveEvents
-		if err := rows.Scan(&event.UUID, &event.EventNumber, &event.EventDate, &event.CentralID, &event.Priority,
-			&event.Title, &event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &event.Timestamp); err != nil {
+		if err := rows.Scan(&event.UUID, &event.EventNumber, &tmpEventDate, &event.CentralID, &event.Priority,
+			&event.Title, &event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp); err != nil {
 			return nil, err
 		}
+		// parse time to actual type
+		parsedEventDate, err := time.Parse(layout, tmpEventDate)
+		if err != nil {
+			return nil, err
+		}
+		parsedTimestamp, err := time.Parse(layout, tmpTimestamp)
+		if err != nil {
+			return nil, err
+		}
+		event.EventDate = parsedEventDate
+		event.Timestamp = parsedTimestamp
+
+		// Append event to slice
 		events = append(events, event)
 	}
 
@@ -226,7 +242,13 @@ func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralI
 		return nil, err
 	}
 
-	return events, nil
+	// Check number of events fount and respond accordingly
+	switch {
+	case len(events) == 0:
+		return nil, &NoEventsFoundError{Detail: "No events found for specified centralId and event number"}
+	default:
+		return events, nil
+	}
 }
 
 // UpdateStatus updates the status of an active event record in the database.

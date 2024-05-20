@@ -76,7 +76,7 @@ func (t *TaskRepository) GetByCategories(categories []string) ([]Task, error) {
 		args[i] = category
 	}
 
-	query := fmt.Sprintf(`SELECT id, title, description, role, category FROM tasks WHERE category IN (%s) ORDER BY priority`,
+	query := fmt.Sprintf(`SELECT id, priority, title, description, role, category FROM tasks WHERE category IN (%s) ORDER BY priority`,
 		strings.Join(placeholders, ","))
 
 	rows, err := t.db.Query(query, args...)
@@ -88,7 +88,7 @@ func (t *TaskRepository) GetByCategories(categories []string) ([]Task, error) {
 
 	for rows.Next() {
 		var task Task
-		if err := rows.Scan(&task.ID, &task.Title, &task.Description, &task.Role, &task.Category); err != nil {
+		if err := rows.Scan(&task.ID, &task.Priority, &task.Title, &task.Description, &task.Role, &task.Category); err != nil {
 			return tasks, err
 		}
 		tasks = append(tasks, task)

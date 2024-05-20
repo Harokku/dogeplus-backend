@@ -5,6 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
+	"strconv"
 )
 
 type eventRequest struct {
@@ -126,6 +127,65 @@ func GetSingleEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 		return ctx.JSON(fiber.Map{
 			"Result": "Event Found",
 			"Events": events,
+			"Tasks":  taskList,
+		})
+	}
+}
+
+// GetSpecificEvent is a handler function that retrieves a specific event based on the provided event number and central ID.
+// It expects a JSON request body containing the event number and central ID.
+// If the body parsing fails, it returns a "400 Bad Request" error.
+// If the central ID or event number field is empty, it returns a "400 Bad Request" error.
+// It retrieves the specific event from the repository based on the provided event number and central ID.
+// If the event is not found, it returns a "404 Not Found" error.
+// If retrieving the event fails for any other reason, it returns a "500 Internal Server Error" error.
+// If the request is successful, it returns a JSON response with the "Result" field set to "Event Found" and the retrieved event.
+// repos is a pointer to a database.Repositories struct that contains the repositories for managing tasks and active events.
+// ctx is a pointer to a fiber.Ctx object representing the HTTP request context.
+func GetSpecificEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
+	return func(ctx *fiber.Ctx) error {
+		var body eventRequest
+		err := ctx.BodyParser(&body)
+		if err != nil {
+			// Error while parsing body
+			log.Errorf("Error parsing body: %s\n", err)
+			return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+		}
+
+		if body.CentralId == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: CentralId field should not be empty")
+		}
+
+		// Read event number from url param
+		eventNumber, err := strconv.Atoi(ctx.Params("eventNumber"))
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: eventNumber should be an integer")
+		}
+
+		// Check if event number is not null
+		if eventNumber == 0 {
+			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: eventNumber should not be zero")
+		}
+
+		// Get task for specified centralId and eventNumber
+		taskList, err := repos.ActiveEvents.GetByCentralAndNumber(eventNumber, body.CentralId)
+		if err != nil {
+			switch err.(type) {
+			case *database.NoEventsFoundError:
+				return ctx.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"Result": "Event not found",
+					"Tasks":  taskList,
+				})
+			default:
+				return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"Result": "Internal server error",
+					"Tasks":  taskList,
+				})
+			}
+		}
+
+		return ctx.JSON(fiber.Map{
+			"Result": "Event Found",
 			"Tasks":  taskList,
 		})
 	}
