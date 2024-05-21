@@ -88,13 +88,15 @@ func CreateNewEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 func GetSingleEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body eventRequest
-		err := ctx.BodyParser(&body)
-		if err != nil {
-			// Error while parsing body
-			log.Errorf("Error parsing body: %s\n", err)
-			return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
-		}
 
+		body.CentralId = ctx.Params("central_id")
+		//err := ctx.BodyParser(&body)
+		//if err != nil {
+		//	// Error while parsing body
+		//	log.Errorf("Error parsing body: %s\n", err)
+		//	return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+		//}
+		//
 		if body.CentralId == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: CentralId field should not be empty")
 		}
@@ -145,19 +147,21 @@ func GetSingleEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 func GetSpecificEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body eventRequest
-		err := ctx.BodyParser(&body)
-		if err != nil {
-			// Error while parsing body
-			log.Errorf("Error parsing body: %s\n", err)
-			return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
-		}
+
+		body.CentralId = ctx.Params("central_id")
+		//err := ctx.BodyParser(&body)
+		//if err != nil {
+		//	// Error while parsing body
+		//	log.Errorf("Error parsing body: %s\n", err)
+		//	return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+		//}
 
 		if body.CentralId == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: CentralId field should not be empty")
 		}
 
 		// Read event number from url param
-		eventNumber, err := strconv.Atoi(ctx.Params("eventNumber"))
+		eventNumber, err := strconv.Atoi(ctx.Params("event_nr"))
 		if err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: eventNumber should be an integer")
 		}
