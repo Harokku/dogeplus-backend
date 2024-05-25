@@ -269,7 +269,7 @@ func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, mod
 	}
 
 	// Update the status
-	_, err = tx.Exec("UPDATE active_events SET status = ?, modified_by = ?, ip_address=? WHERE uuid = ?", status, modifiedBy, ipAddress, uuid)
+	_, err = tx.Exec("UPDATE active_events SET status = ?, modified_by = ?, ip_address=?, timestamp=? WHERE uuid = ?", status, modifiedBy, ipAddress, time.Now(), uuid)
 	if err != nil {
 		tx.Rollback()
 		return ActiveEvents{}, err
@@ -278,9 +278,12 @@ func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, mod
 	// Fetch the updated row
 	row := tx.QueryRow("SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, ip_address, timestamp FROM active_events WHERE uuid = ?", uuid)
 
+	var tmpEventDate string // event date as string to be scanned to before parsing
+	var tmpTimestamp string // timestamp as string to be scanned to before parsing
+	layout := "2006-01-02 15:04:05.999999-07:00"
 	var event ActiveEvents
-	err = row.Scan(&event.UUID, &event.EventNumber, &event.EventDate, &event.CentralID, &event.Priority, &event.Title,
-		&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &event.Timestamp)
+	err = row.Scan(&event.UUID, &event.EventNumber, &tmpEventDate, &event.CentralID, &event.Priority, &event.Title,
+		&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp)
 	if err != nil {
 		tx.Rollback()
 		return ActiveEvents{}, err
@@ -291,6 +294,18 @@ func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, mod
 	if err != nil {
 		return ActiveEvents{}, err
 	}
+
+	// parse time to actual type
+	parsedEventDate, err := time.Parse(layout, tmpEventDate)
+	if err != nil {
+		return ActiveEvents{}, err
+	}
+	parsedTimestamp, err := time.Parse(layout, tmpTimestamp)
+	if err != nil {
+		return ActiveEvents{}, err
+	}
+	event.EventDate = parsedEventDate
+	event.Timestamp = parsedTimestamp
 
 	return event, nil
 }

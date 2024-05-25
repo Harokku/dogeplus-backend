@@ -195,7 +195,25 @@ func GetSpecificEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	}
 }
 
-// TODO: Implement broadcast call
+// UpdateEventTask is a handler function that updates the status of an active event in the database.
+// It expects a JSON request body containing the UUID, status, and modified by fields.
+// If the body parsing fails, it returns a "400 Bad Request" error.
+// If the UUID field is empty, it returns a "400 Bad Request" error.
+// If the status field is empty, it returns a "400 Bad Request" error.
+// If the modified by field is empty, it returns a "400 Bad Request" error.
+// It retrieves the client's IP address from the request context and updates the event's IP address field.
+// It updates the event's status, IP address, and modified by fields in the database.
+// If updating the event fails, it returns a "500 Internal Server Error" error.
+// TODO: Implement broadcast to all clients
+// If the request is successful, it returns a JSON response with the "Result" field set to "Event Task Updated"
+// and the updated event information in the "Events" field.
+// repos is a pointer to a database.Repositories struct that contains the repositories for managing active events.
+// ctx is a pointer to a fiber.Ctx object representing the HTTP request context.
+//
+// Example usage:
+//
+// repos := &database.Repositories{...}
+// app.Put("/event-task", UpdateEventTask(repos))
 func UpdateEventTask(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body updateEventRequest
@@ -216,7 +234,7 @@ func UpdateEventTask(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: Status field should not be empty")
 		}
 
-		//check in Modifed by is nil
+		//check in Modified by is nil
 		if body.ModifiedBy == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request: ModifiedBy field should not be empty")
 		}
@@ -225,7 +243,7 @@ func UpdateEventTask(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 		body.IpAddress = ctx.IP()
 
 		// Actually update the event in db
-		updatedTask, err := repos.ActiveEvents.UpdateStatus(body.UUID, body.Status, body.IpAddress, body.ModifiedBy)
+		updatedTask, err := repos.ActiveEvents.UpdateStatus(body.UUID, body.Status, body.ModifiedBy, body.IpAddress)
 		if err != nil {
 			log.Errorf("Error updating event task: %s\n", err)
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update event task")
