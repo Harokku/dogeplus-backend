@@ -97,12 +97,12 @@ func createTables(db *sql.DB) error {
 		// Indexes for active events table
 		`CREATE INDEX IF NOT EXISTS idx_active_events_central_id ON active_events(central_id)`,
 		// Trigger for active events table
-		`CREATE TRIGGER IF NOT EXISTS update_timestamp
-			BEFORE UPDATE OF status, modified_by ON active_events
-			FOR EACH ROW
-		BEGIN 
-			UPDATE active_events SET timestamp = (strftime('%Y-%m-%d %H:%M:%f', 'now')) WHERE uuid = OLD.uuid;
-		END`,
+		//`CREATE TRIGGER IF NOT EXISTS update_timestamp
+		//	BEFORE UPDATE OF status, modified_by ON active_events
+		//	FOR EACH ROW
+		//BEGIN
+		//	UPDATE active_events SET timestamp = (strftime('%Y-%m-%d %H:%M:%f', 'now')) WHERE uuid = OLD.uuid;
+		//END`,
 	}
 
 	// Execute each command within the transaction

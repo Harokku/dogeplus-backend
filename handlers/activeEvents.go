@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"dogeplus-backend/broadcast"
 	"dogeplus-backend/database"
+	"encoding/json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
@@ -214,7 +216,7 @@ func GetSpecificEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 //
 // repos := &database.Repositories{...}
 // app.Put("/event-task", UpdateEventTask(repos))
-func UpdateEventTask(repos *database.Repositories) func(ctx *fiber.Ctx) error {
+func UpdateEventTask(repos *database.Repositories, cm *broadcast.ConnectionManager) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body updateEventRequest
 		err := ctx.BodyParser(&body)
@@ -249,11 +251,22 @@ func UpdateEventTask(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to update event task")
 		}
 
-		// TODO: Implement broadcast to all clients
-
-		return ctx.JSON(fiber.Map{
+		// Build map for both response and broadcast
+		updatedTaskMap := fiber.Map{
 			"Result": "Event Task Updated",
 			"Events": updatedTask,
-		})
+		}
+
+		// Send broadcast response via connection manager in JSON format
+		// If error skip broadcast phase
+		updatedTaskJson, err := json.Marshal(updatedTaskMap)
+		if err != nil {
+			log.Errorf("Error marshalling updated task: %s\n", err)
+		} else {
+			cm.Broadcast(updatedTaskJson)
+		}
+
+		// Send response wia http
+		return ctx.JSON(updatedTaskMap)
 	}
 }
