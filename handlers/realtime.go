@@ -47,7 +47,10 @@ func WsHandler(cm *broadcast.ConnectionManager) fiber.Handler {
 
 			// TODO: Debug only, remove in prod
 			if messageType == websocket.TextMessage {
-				cm.Broadcast(messageData)
+				//cm.Broadcast(messageData)
+				if string(messageData) == "ping" {
+					wsBroadcaster.Send([]byte("pong"))
+				}
 			}
 		}
 	})
