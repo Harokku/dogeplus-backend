@@ -25,24 +25,38 @@ func (e NoEventsFoundError) Error() string {
 
 // ActiveEvents represents active events with relative properties
 type ActiveEvents struct {
-	UUID        uuid.UUID `json:"uuid"`
-	EventNumber int       `json:"event_number"`
-	EventDate   time.Time `json:"event_date"`
-	CentralID   string    `json:"central_id"`
-	Priority    int       `json:"priority"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Role        string    `json:"role"`
-	Status      string    `json:"status"`
-	ModifiedBy  string    `json:"modified_by"`
-	IpAddress   string    `json:"ip_address"`
-	Timestamp   time.Time `json:"timestamp"`
+	UUID            uuid.UUID `json:"uuid"`
+	EventNumber     int       `json:"event_number"`
+	EventDate       time.Time `json:"event_date"`
+	CentralID       string    `json:"central_id"`
+	Priority        int       `json:"priority"`
+	Title           string    `json:"title"`
+	Description     string    `json:"description"`
+	Role            string    `json:"role"`
+	Status          string    `json:"status"`
+	ModifiedBy      string    `json:"modified_by"`
+	IpAddress       string    `json:"ip_address"`
+	Timestamp       time.Time `json:"timestamp"`
+	EscalationLevel string    `json:"escalation_level"`
 }
 
+// Package database provides constants for representing the status of a task.
+// The following constants are available:
+// - TaskNotdone represents a task that has not been done.
+// - TaskWorking represents a task that is currently being worked on.
+// - TaskDone represents a task that has been completed.
+// These constants should be used to indicate the status of a task in the application.
 const (
 	TaskNotdone = "notdone"
 	TaskWorking = "working"
 	TaskDone    = "done"
+)
+
+// Constants representing different escalation levels.
+const (
+	EscalationAlarm     = "allarme"
+	EscalationEmergency = "emergenza"
+	EscalationIncident  = "incidente"
 )
 
 // ActiveEventsRepository represents a repository for managing active events
@@ -65,11 +79,11 @@ func NewActiveEventRepository(db *sql.DB) *ActiveEventsRepository {
 // It returns an error if the database operation fails.
 func (e *ActiveEventsRepository) Add(tx *sql.Tx, task ActiveEvents) error {
 	query := `INSERT INTO active_events (UUID, event_number , event_date, central_id, Priority, Title, Description, 
-				Role, Status,modified_by,ip_address, Timestamp)
-			   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`
+				Role, Status,modified_by,ip_address, Timestamp, escalation_level)
+			   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)`
 
 	_, err := tx.Exec(query, task.UUID, task.EventNumber, task.EventDate, task.CentralID, task.Priority, task.Title,
-		task.Description, task.Role, task.Status, task.ModifiedBy, task.IpAddress, task.Timestamp)
+		task.Description, task.Role, task.Status, task.ModifiedBy, task.IpAddress, task.Timestamp, task.EscalationLevel)
 
 	return err
 }
@@ -81,16 +95,17 @@ func (e *ActiveEventsRepository) Add(tx *sql.Tx, task ActiveEvents) error {
 // It returns the converted ActiveEvents object.
 func (e *ActiveEventsRepository) TaskToActiveEvent(task Task, eventNumber int, centralId string) ActiveEvents {
 	return ActiveEvents{
-		UUID:        uuid.New(),
-		EventNumber: eventNumber,
-		EventDate:   time.Now(),
-		CentralID:   centralId,
-		Priority:    task.Priority,
-		Title:       task.Title,
-		Description: task.Description,
-		Role:        task.Role,
-		Status:      TaskNotdone,
-		Timestamp:   time.Now(),
+		UUID:            uuid.New(),
+		EventNumber:     eventNumber,
+		EventDate:       time.Now(),
+		CentralID:       centralId,
+		Priority:        task.Priority,
+		Title:           task.Title,
+		Description:     task.Description,
+		Role:            task.Role,
+		Status:          TaskNotdone,
+		Timestamp:       time.Now(),
+		EscalationLevel: task.EscalationLevel,
 	}
 }
 
@@ -138,7 +153,7 @@ func (e *ActiveEventsRepository) CreateFromTaskList(tasks []Task, eventNumber in
 // and an error if the database operation fails.
 func (e *ActiveEventsRepository) GetByCentralID(centralId string) ([]ActiveEvents, []int, error) {
 	rows, err := e.db.Query(`SELECT uuid, event_number, event_date, central_id, priority, title, 
-    description, role, status, modified_by, ip_address, timestamp FROM active_events WHERE central_id = ?`, centralId)
+    description, role, status, modified_by, ip_address, timestamp, escalation_level FROM active_events WHERE central_id = ?`, centralId)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -154,7 +169,7 @@ func (e *ActiveEventsRepository) GetByCentralID(centralId string) ([]ActiveEvent
 		var tmpTimestamp string // timestamp as string to be scanned to before parsing
 		var event ActiveEvents
 		if err := rows.Scan(&event.UUID, &event.EventNumber, &tmpEventDate, &event.CentralID, &event.Priority, &event.Title,
-			&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp); err != nil {
+			&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp, &event.EscalationLevel); err != nil {
 			return nil, nil, err
 		}
 		// parse time to actual type
@@ -204,7 +219,7 @@ func (e *ActiveEventsRepository) GetByCentralID(centralId string) ([]ActiveEvent
 // It returns a slice of ActiveEvents representing the retrieved events
 // and an error if the database operation fails.
 func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralId string) ([]ActiveEvents, error) {
-	rows, err := e.db.Query(`SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, ip_address, timestamp
+	rows, err := e.db.Query(`SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, ip_address, timestamp, escalation_level
 								FROM active_events WHERE central_id = ? AND event_number = ?`, centralId, eventNumber)
 	if err != nil {
 		return nil, err
@@ -219,7 +234,7 @@ func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralI
 		var tmpTimestamp string // timestamp as string to be scanned to before parsing
 		var event ActiveEvents
 		if err := rows.Scan(&event.UUID, &event.EventNumber, &tmpEventDate, &event.CentralID, &event.Priority,
-			&event.Title, &event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp); err != nil {
+			&event.Title, &event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp, &event.EscalationLevel); err != nil {
 			return nil, err
 		}
 		// parse time to actual type
@@ -276,14 +291,14 @@ func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, mod
 	}
 
 	// Fetch the updated row
-	row := tx.QueryRow("SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, ip_address, timestamp FROM active_events WHERE uuid = ?", uuid)
+	row := tx.QueryRow("SELECT uuid, event_number, event_date, central_id, priority, title, description, role, status, modified_by, ip_address, timestamp, escalation_level FROM active_events WHERE uuid = ?", uuid)
 
 	var tmpEventDate string // event date as string to be scanned to before parsing
 	var tmpTimestamp string // timestamp as string to be scanned to before parsing
 	layout := "2006-01-02 15:04:05.999999-07:00"
 	var event ActiveEvents
 	err = row.Scan(&event.UUID, &event.EventNumber, &tmpEventDate, &event.CentralID, &event.Priority, &event.Title,
-		&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp)
+		&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp, &event.EscalationLevel)
 	if err != nil {
 		tx.Rollback()
 		return ActiveEvents{}, err

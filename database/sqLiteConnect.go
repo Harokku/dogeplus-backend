@@ -77,7 +77,14 @@ func createTables(db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY, data TEXT)`,
 
 		// Tasks table
-		`CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY, priority INTEGER, title TEXT, description TEXT, role TEXT, category TEXT)`,
+		`CREATE TABLE IF NOT EXISTS tasks (
+			id INTEGER PRIMARY KEY, 
+			priority INTEGER, 
+			title TEXT, 
+			description TEXT, 
+			role TEXT, 
+			category TEXT,
+			escalation_level TEXT CHECK ( escalation_level IN ('allarme','emergenza','incidente')))`,
 		// No trigger for task table
 
 		// Active events table
@@ -93,7 +100,8 @@ func createTables(db *sql.DB) error {
 			status TEXT CHECK ( status IN ('notdone','working','done')), 
 			modified_by TEXT, 
 			ip_address TEXT DEFAULT '0.0.0.0',
-			timestamp TEXT)`,
+			timestamp TEXT,
+			escalation_level TEXT CHECK (escalation_level in ('allarme', 'emergenza', 'incidente')))`,
 		// Indexes for active events table
 		`CREATE INDEX IF NOT EXISTS idx_active_events_central_id ON active_events(central_id)`,
 		// Trigger for active events table
