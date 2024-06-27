@@ -84,6 +84,7 @@ var rankedLevels = map[Level]int{
 // the new level is added to the levels map.
 type EscalationLevels struct {
 	Levels map[int]Level
+	mu     sync.RWMutex
 }
 
 // NewEscalationLevels constructs a new EscalationLevels struct.
@@ -108,7 +109,7 @@ func NewEscalationLevelsFromData(data map[int][]Level) *EscalationLevels {
 // convertDbResultToData converts the provided DB data into a map of event numbers and levels.
 // It iterates over the dbData slice and retrieves the escalation level for each event.
 // If the escalation level is one of the allowed levels (Allarme, Emergenza, Incidente), it adds it to the map under the respective event number.
-// If the escalation level is not recognized, it returns an error with a message indicating the unknown event number.
+// If the escalation level is not recognized, it returns an error with a message indicating the unknown event number with associated wrong level.
 // The function returns the resulting map of event numbers and levels, along with any potential error.
 func convertDbResultToData(dbData []ActiveEvents) (map[int][]Level, error) {
 	var result = make(map[int][]Level)
@@ -119,7 +120,7 @@ func convertDbResultToData(dbData []ActiveEvents) (map[int][]Level, error) {
 		case Allarme, Emergenza, Incidente:
 			result[event.EventNumber] = append(result[event.EventNumber], level)
 		default:
-			return nil, fmt.Errorf("unknown event number: %d", event.EventNumber)
+			return nil, fmt.Errorf("unknown level: %s for event number: %d", level, event.EventNumber)
 		}
 	}
 	return result, nil
@@ -129,6 +130,9 @@ func convertDbResultToData(dbData []ActiveEvents) (map[int][]Level, error) {
 // If the event number is not already present in the levels map or the new level is higher than the existing level,
 // the new level is added to the levels map.
 func (el *EscalationLevels) Add(eventNumber int, level Level) {
+	el.mu.Lock()
+	defer el.mu.Unlock()
+
 	// Only add if it does not exist or level is higher
 	if existingLevel, ok := el.Levels[eventNumber]; !ok || rankedLevels[level] > rankedLevels[existingLevel] {
 		el.Levels[eventNumber] = level
@@ -138,33 +142,75 @@ func (el *EscalationLevels) Add(eventNumber int, level Level) {
 // Remove deletes the escalation level for a specific event number from the Levels map.
 // If the event number is not present in the Levels map, nothing happens.
 func (el *EscalationLevels) Remove(eventNumber int) {
+	el.mu.Lock()
+	defer el.mu.Unlock()
+
 	delete(el.Levels, eventNumber)
 }
 
-// Escalate updates the escalation level for a specific event number in the EscalationLevels struct.
-// It only updates the level if the new level is higher than the existing level.
-// The updated level is stored in the Levels map, using the event number as the key.
-//
-// Parameters:
-//   - eventNumber: The event number for which to update the escalation level.
-//   - newLevel: The new escalation level to set.
-func (el *EscalationLevels) Escalate(eventNumber int, newLevel Level) {
-	// Only escalate if newLevel is higher
-	if existingLevel, ok := el.Levels[eventNumber]; ok && rankedLevels[newLevel] > rankedLevels[existingLevel] {
-		el.Levels[eventNumber] = newLevel
-	}
+func (el *EscalationLevels) RemoveEvent(event int) {
+	el.mu.Lock()
+	defer el.mu.Unlock()
+
+	delete(el.Levels, event)
 }
 
-// Deescalate updates the escalation level for a specific event number in the EscalationLevels struct.
-// It only updates the level if the new level is lower than the existing level.
-// The updated level is stored in the Levels map, using the event number as the key.
+// Escalate escalates the level of a specific event number in the EscalationLevels struct.
+// It checks if the newLevel is higher than the existing level for the given event number.
+// If it is, the newLevel is updated in the Levels map.
+// If the newLevel is not one of the allowed levels (Allarme, Emergenza, Incidente),
+// an error is returned with a message indicating the invalid level.
 //
 // Parameters:
-//   - eventNumber: The event number for which to update the escalation level.
-//   - newLevel: The new escalation level to set.
-func (el *EscalationLevels) Deescalate(eventNumber int, newLevel Level) {
-	// Only deescalate if newLevel is lower
-	if existingLevel, ok := el.Levels[eventNumber]; ok && rankedLevels[newLevel] < rankedLevels[existingLevel] {
-		el.Levels[eventNumber] = newLevel
+// - eventNumber: the number of the event for which the level is being escalated
+// - newLevel: the new level to be escalated to
+//
+// Returns:
+//   - error: an error if the newLevel is not one of the allowed levels
+//     or if the newLevel is not higher than the existing level for the event number
+func (el *EscalationLevels) Escalate(eventNumber int, newLevel Level) error {
+	el.mu.Lock()
+	defer el.mu.Unlock()
+
+	switch newLevel {
+	case Allarme, Emergenza, Incidente:
+		// Only escalate if newLevel is higher
+		if existingLevel, ok := el.Levels[eventNumber]; ok && rankedLevels[newLevel] > rankedLevels[existingLevel] {
+			el.Levels[eventNumber] = newLevel
+		}
+	default:
+		return fmt.Errorf("invalid level provided: %s", newLevel)
 	}
+
+	return nil
+}
+
+// Deescalate deescalates the level of a specific event number in the EscalationLevels struct.
+// It checks if the newLevel is lower than the existing level for the given event number.
+// If it is, the newLevel is updated in the Levels map.
+// If the newLevel is not one of the allowed levels (Allarme, Emergenza, Incidente),
+// an error is returned with a message indicating the invalid level.
+//
+// Parameters:
+// - eventNumber: the number of the event for which the level is being deescalated
+// - newLevel: the new level to be deescalated to
+//
+// Returns:
+//   - error: an error if the newLevel is not one of the allowed levels
+//     or if the newLevel is not lower than the existing level for the event number
+func (el *EscalationLevels) Deescalate(eventNumber int, newLevel Level) error {
+	el.mu.Lock()
+	defer el.mu.Unlock()
+
+	switch newLevel {
+	case Allarme, Emergenza, Incidente:
+		// Only deescalate if newLevel is lower
+		if existingLevel, ok := el.Levels[eventNumber]; ok && rankedLevels[newLevel] < rankedLevels[existingLevel] {
+			el.Levels[eventNumber] = newLevel
+		}
+	default:
+		return fmt.Errorf("invalid level provided: %s", newLevel)
+	}
+
+	return nil
 }
