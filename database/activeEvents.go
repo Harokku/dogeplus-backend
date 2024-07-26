@@ -266,6 +266,30 @@ func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralI
 	}
 }
 
+// GetAllEventsStatus retrieves the event_number and status of all active events from the database.
+// This method executes a database query to select the event_number and status columns from the active_events table.
+// It returns a slice of ActiveEvents representing the retrieved events and an error if the database operation fails.
+func (e *ActiveEventsRepository) GetAllEventsStatus() ([]ActiveEvents, error) {
+	rows, err := e.db.Query(`SELECT event_number, status FROM active_events`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	events := []ActiveEvents{}
+
+	// Scan rows to return slice
+	for rows.Next() {
+		var event ActiveEvents
+		if err := rows.Scan(&event.EventNumber, &event.Status); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+
+	return events, nil
+}
+
 // UpdateStatus updates the status of an active event record in the database.
 // The uuid parameter is the UUID of the active event record to update.
 // The status parameter is the new status value to set.

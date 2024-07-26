@@ -5,6 +5,11 @@ import (
 	"sync"
 )
 
+var (
+	taskCompletionInstance *TaskCompletionMap
+	taskCompletionOnce     sync.Once
+)
+
 // TaskCompletionInfo is a struct type that represents the completion information of a task.
 //
 // It has two fields 'Completed' and 'Total' which store the number of completed tasks and
@@ -56,8 +61,20 @@ func (tci *TaskCompletionInfo) Ratio() float32 {
 //	  fmt.Println("Task not found")
 //	}
 type TaskCompletionMap struct {
-	sync.RWMutex
+	mu   sync.RWMutex
 	Data map[string]TaskCompletionInfo
+}
+
+// GetTaskCompletionMapInstance returns a singleton instance of TaskCompletionMap
+func GetTaskCompletionMapInstance() *TaskCompletionMap {
+	taskCompletionOnce.Do(func() {
+		taskCompletionInstance = &TaskCompletionMap{
+			Data: make(map[string]TaskCompletionInfo),
+			mu:   sync.RWMutex{},
+		}
+		//TODO: Implement initial state fetch from db
+	})
+	return taskCompletionInstance
 }
 
 // Level is a string type used to represent different levels of allowed escalation or incident severity.
