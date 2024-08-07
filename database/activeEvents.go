@@ -40,6 +40,16 @@ type ActiveEvents struct {
 	EscalationLevel string    `json:"escalation_level"`
 }
 
+// AggregatedActiveEvents represents aggregated active events with the following properties:
+//   - EventNumber: the event number
+//   - Done: the number of events that are marked as done
+//   - Total: the total number of events
+type AggregatedActiveEvents struct {
+	EventNumber int `json:"event_number"`
+	Done        int `json:"done"`
+	Total       int `json:"total"`
+}
+
 // Package database provides constants for representing the status of a task.
 // The following constants are available:
 // - TaskNotdone represents a task that has not been done.
@@ -276,12 +286,46 @@ func (e *ActiveEventsRepository) GetAllEventsStatus() ([]ActiveEvents, error) {
 	}
 	defer rows.Close()
 
-	events := []ActiveEvents{}
+	var events []ActiveEvents
 
 	// Scan rows to return slice
 	for rows.Next() {
 		var event ActiveEvents
 		if err := rows.Scan(&event.EventNumber, &event.Status); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+
+	return events, nil
+}
+
+// GetAggregatedEventStatus retrieves the aggregated status of active events.
+// This method executes a database query to retrieve the event number, the count of events marked as done,
+// and the total count of events for each event number from the active_events table.
+// It returns a slice of AggregatedActiveEvents representing the aggregated status of active events
+// and an error if the database operation fails.
+func (e *ActiveEventsRepository) GetAggregatedEventStatus() ([]AggregatedActiveEvents, error) {
+	rows, err := e.db.Query(`SELECT
+    								event_number,
+    								SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as done,
+    								COUNT(*) as total
+								FROM
+    								active_events
+								GROUP BY
+    								event_number`)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var events []AggregatedActiveEvents
+
+	// Scan rows to return slice
+	for rows.Next() {
+		var event AggregatedActiveEvents
+		if err := rows.Scan(&event.EventNumber, &event.Done, &event.Total); err != nil {
 			return nil, err
 		}
 		events = append(events, event)

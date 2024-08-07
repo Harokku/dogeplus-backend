@@ -40,26 +40,7 @@ func (tci *TaskCompletionInfo) Ratio() float32 {
 // TaskCompletionMap is a struct type that represents a map of task completion information
 //
 // It has two fields 'sync.RWMutex' for concurrent-safe access to the map and 'Data' which is the actual map
-// that associates task names (string) with their completion information (TaskCompletionInfo)
-//
-// Example usage:
-//
-//	var tcm TaskCompletionMap
-//	tcm.Data = make(map[string]TaskCompletionInfo)
-//	tcm.Lock()    // Lock access to the map
-//	tcm.Data["task1"] = TaskCompletionInfo{Completed: 2, Total: 5}
-//	tcm.Data["task2"] = TaskCompletionInfo{Completed: 3, Total: 8}
-//	tcm.Unlock()  // Unlock access to the map
-//
-//	tcm.RLock()   // Read lock access to the map
-//	info, exists := tcm.Data["task1"]
-//	tcm.RUnlock() // Unlock read access to the map
-//	if exists {
-//	  ratio := info.Ratio() // Calculate the completion ratio of the task
-//	  fmt.Println(ratio)
-//	} else {
-//	  fmt.Println("Task not found")
-//	}
+// that associates task number (string) with their completion information (TaskCompletionInfo)
 type TaskCompletionMap struct {
 	mu   sync.RWMutex
 	Data map[string]TaskCompletionInfo
