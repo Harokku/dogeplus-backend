@@ -493,6 +493,51 @@ func TestUpdateEventStatus(t *testing.T) {
 	}
 }
 
+func TestDeleteEvent(t *testing.T) {
+	tests := []struct {
+		name         string
+		eventNumber  int
+		initialData  map[int]TaskCompletionInfo
+		expectedData map[int]TaskCompletionInfo
+	}{
+		{
+			name:        "DeleteExistingEvent",
+			eventNumber: 1,
+			initialData: map[int]TaskCompletionInfo{
+				1: {Completed: 2, Total: 5},
+				2: {Completed: 3, Total: 4},
+			},
+			expectedData: map[int]TaskCompletionInfo{
+				2: {Completed: 3, Total: 4},
+			},
+		},
+		{
+			name:        "DeleteNonExistingEvent",
+			eventNumber: 3,
+			initialData: map[int]TaskCompletionInfo{
+				1: {Completed: 2, Total: 5},
+				2: {Completed: 3, Total: 4},
+			},
+			expectedData: map[int]TaskCompletionInfo{
+				1: {Completed: 2, Total: 5},
+				2: {Completed: 3, Total: 4},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tcm := &TaskCompletionMap{
+				Data: tt.initialData,
+			}
+			tcm.DeleteEvent(tt.eventNumber)
+			if !reflect.DeepEqual(tcm.Data, tt.expectedData) {
+				t.Errorf("Expected %+v, but got %+v", tt.expectedData, tcm.Data)
+			}
+		})
+	}
+}
+
 func TestAddMultipleNotDoneTasks(t *testing.T) {
 	tests := []struct {
 		name          string

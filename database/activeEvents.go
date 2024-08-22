@@ -150,6 +150,12 @@ func (e *ActiveEventsRepository) CreateFromTaskList(tasks []Task, eventNumber in
 		}
 	}
 
+	// Get singleton instance of TaskCompletionMap to update aggregation
+	taskCompletionMap := GetTaskCompletionMapInstance(nil)
+
+	// Add the new event with the number of related tasks, setting them as not completed
+	taskCompletionMap.AddNewEvent(eventNumber, len(tasks))
+
 	return nil
 }
 
@@ -390,6 +396,12 @@ func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, mod
 	event.EventDate = parsedEventDate
 	event.Timestamp = parsedTimestamp
 
+	// Get singleton instance of TaskCompletionMap to update aggregation
+	taskCompletionMap := GetTaskCompletionMapInstance(nil)
+
+	// Update the aggregation with query result data
+	taskCompletionMap.UpdateEventStatus(event.EventNumber, event.Status)
+
 	return event, nil
 }
 
@@ -408,5 +420,10 @@ func (e *ActiveEventsRepository) DeleteEvent(eventNumber int, centralId string) 
 		return err
 	}
 
+	// Get singleton instance of TaskCompletionMap to update aggregation
+	taskCompletionMap := GetTaskCompletionMapInstance(nil)
+
+	// Actually delete the data from the aggregation instance
+	taskCompletionMap.DeleteEvent(eventNumber)
 	return nil
 }

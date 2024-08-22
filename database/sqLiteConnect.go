@@ -133,15 +133,27 @@ func createTables(db *sql.DB) error {
 
 // Repositories represents a collection of different repositories for managing tasks and active events.
 type Repositories struct {
-	Tasks        *TaskRepository
-	ActiveEvents *ActiveEventsRepository
+	Tasks                     *TaskRepository
+	ActiveEvents              *ActiveEventsRepository
+	TaskCompletionAggregation *TaskCompletionMap
 }
 
 // NewRepositories initializes a new instance of Repositories with the provided *sql.DB object.
 // It returns a pointer to the created Repositories.
 func NewRepositories(db *sql.DB) *Repositories {
-	return &Repositories{
+	repos := &Repositories{
 		Tasks:        NewTaskRepository(db),
 		ActiveEvents: NewActiveEventRepository(db),
 	}
+
+	// initialize aggregation map using data from db trough repos
+	initialTaskAggregation, err := repos.ActiveEvents.GetAggregatedEventStatus()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// initialize task aggregation repo
+	repos.TaskCompletionAggregation = GetTaskCompletionMapInstance(initialTaskAggregation)
+
+	return repos
 }

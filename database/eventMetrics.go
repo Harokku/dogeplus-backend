@@ -91,6 +91,15 @@ func (tcm *TaskCompletionMap) AddNewEvent(eventNumber int, numberOfTasks int) {
 	}
 }
 
+// DeleteEvent removes an event from the TaskCompletionMap with the specified
+// event ID. If the event ID does not exist in the map, no action is taken.
+// This method uses a lock to ensure concurrent-safe access to the map.
+func (tcm *TaskCompletionMap) DeleteEvent(eventId int) {
+	tcm.mu.Lock()
+	defer tcm.mu.Unlock()
+	delete(tcm.Data, eventId)
+}
+
 // GetTaskCompletionMapInstance retrieves the singleton instance of TaskCompletionMap.
 //
 // It constructs a new TaskCompletionMap instance if it hasn't been created yet.
