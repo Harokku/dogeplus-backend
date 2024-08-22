@@ -14,15 +14,6 @@ var (
 //
 // It has two fields 'Completed' and 'Total' which store the number of completed tasks and
 // the total number of tasks respectively.
-//
-// Example usage:
-//
-//	var tci TaskCompletionInfo
-//	tci.Completed = 5
-//	tci.Total = 10
-//
-//	ratio := tci.Ratio() // Calculate the completion ratio of the task
-//	fmt.Println(ratio)
 type TaskCompletionInfo struct {
 	Completed int
 	Total     int
@@ -43,17 +34,83 @@ func (tci *TaskCompletionInfo) Ratio() float32 {
 // that associates task number (string) with their completion information (TaskCompletionInfo)
 type TaskCompletionMap struct {
 	mu   sync.RWMutex
-	Data map[string]TaskCompletionInfo
+	Data map[int]TaskCompletionInfo
 }
 
-// GetTaskCompletionMapInstance returns a singleton instance of TaskCompletionMap
-func GetTaskCompletionMapInstance() *TaskCompletionMap {
+// UpdateEventStatus updates the status of a specific event in the TaskCompletionMap.
+// It takes the event number and the new status as parameters.
+// If the event number exists in the map, the function updates the completion information
+// based on the new status. If the status is "done", the number of completed tasks is
+// incremented by 1. If the status is "working" or "notdone", the number of completed tasks
+// is decremented by 1. The updated completion information is then stored back in the map.
+// If the event number does not exist in the map, no action is taken.
+// This method uses a lock to ensure concurrent-safe access to the map.
+func (tcm *TaskCompletionMap) UpdateEventStatus(eventNumber int, status string) {
+	tcm.mu.Lock()
+	defer tcm.mu.Unlock()
+
+	if data, ok := tcm.Data[eventNumber]; ok {
+		if status == "done" {
+			data.Completed++
+		} else if status == "working" || status == "notdone" {
+			data.Completed--
+		}
+		tcm.Data[eventNumber] = data
+	}
+}
+
+// AddMultipleNotDoneTasks is a method of the TaskCompletionMap type. It adds the specified number
+// of tasks to the total number of tasks for the given event number. If the event number does not
+// exist in the map, no action is taken. This method uses a lock to ensure concurrent-safe access
+// to the map.
+func (tcm *TaskCompletionMap) AddMultipleNotDoneTasks(eventNumber int, numberOfTasks int) {
+	tcm.mu.Lock()
+	defer tcm.mu.Unlock()
+
+	if data, ok := tcm.Data[eventNumber]; ok {
+		data.Total += numberOfTasks
+		tcm.Data[eventNumber] = data
+	}
+}
+
+// AddNewEvent adds a new event to the TaskCompletionMap with the specified
+// event number and the number of tasks. If the event number already exists
+// in the map, no action is taken. This method uses a lock to ensure
+// concurrent-safe access to the map.
+func (tcm *TaskCompletionMap) AddNewEvent(eventNumber int, numberOfTasks int) {
+	tcm.mu.Lock()
+	defer tcm.mu.Unlock()
+
+	if _, ok := tcm.Data[eventNumber]; ok {
+		return
+	}
+
+	tcm.Data[eventNumber] = TaskCompletionInfo{
+		Completed: 0,
+		Total:     numberOfTasks,
+	}
+}
+
+// GetTaskCompletionMapInstance retrieves the singleton instance of TaskCompletionMap.
+//
+// It constructs a new TaskCompletionMap instance if it hasn't been created yet.
+// The function initializes the Data map of the TaskCompletionMap instance
+// with the task completion information from the input AggregatedActiveEvents slice.
+//
+// This function is thread-safe due to the use of sync.Once.
+// It returns a pointer to the TaskCompletionMap instance.
+func GetTaskCompletionMapInstance(events []AggregatedActiveEvents) *TaskCompletionMap {
 	taskCompletionOnce.Do(func() {
 		taskCompletionInstance = &TaskCompletionMap{
-			Data: make(map[string]TaskCompletionInfo),
+			Data: make(map[int]TaskCompletionInfo),
 			mu:   sync.RWMutex{},
 		}
-		//TODO: Implement initial state fetch from db
+		for _, event := range events {
+			taskCompletionInstance.Data[event.EventNumber] = TaskCompletionInfo{
+				Completed: event.Done,
+				Total:     event.Total,
+			}
+		}
 	})
 	return taskCompletionInstance
 }
@@ -144,13 +201,6 @@ func (el *EscalationLevels) Remove(eventNumber int) {
 	defer el.mu.Unlock()
 
 	delete(el.Levels, eventNumber)
-}
-
-func (el *EscalationLevels) RemoveEvent(event int) {
-	el.mu.Lock()
-	defer el.mu.Unlock()
-
-	delete(el.Levels, event)
 }
 
 // Escalate escalates the level of a specific event number in the EscalationLevels struct.
