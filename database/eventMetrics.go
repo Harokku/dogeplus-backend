@@ -6,8 +6,10 @@ import (
 )
 
 var (
-	taskCompletionInstance *TaskCompletionMap
-	taskCompletionOnce     sync.Once
+	taskCompletionInstance  *TaskCompletionMap
+	taskCompletionOnce      sync.Once
+	escalationLevelInstance *EscalationLevels
+	escalationLevelOnce     sync.Once
 )
 
 // TaskCompletionInfo is a struct type that represents the completion information of a task.
@@ -157,17 +159,20 @@ func NewEscalationLevels() *EscalationLevels {
 	return &EscalationLevels{Levels: make(map[int]Level)}
 }
 
-// NewEscalationLevelsFromData constructs a new EscalationLevels struct from the given data map.
+// GetEscalationLevelsInstance constructs a new EscalationLevels struct from the given data map.
 // It iterates over the data map, retrieves the levels for each event number, and adds them to the new EscalationLevels struct.
 // The function returns the constructed EscalationLevels struct.
-func NewEscalationLevelsFromData(data map[int][]Level) *EscalationLevels {
-	el := NewEscalationLevels()
-	for eventNumber, levels := range data {
-		for _, level := range levels {
-			el.Add(eventNumber, level)
+func GetEscalationLevelsInstance(data map[int][]Level) *EscalationLevels {
+	escalationLevelOnce.Do(func() {
+		escalationLevelInstance = NewEscalationLevels()
+
+		for eventNumber, levels := range data {
+			for _, level := range levels {
+				escalationLevelInstance.Add(eventNumber, level)
+			}
 		}
-	}
-	return el
+	})
+	return escalationLevelInstance
 }
 
 // convertDbResultToData converts the provided DB data into a map of event numbers and levels.

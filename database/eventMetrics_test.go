@@ -59,33 +59,40 @@ func TestRatio(t *testing.T) {
 	}
 }
 
-func TestNewEscalationLevelsFromData(t *testing.T) {
+func TestGetEscalationLevelsInstance(t *testing.T) {
 	tests := []struct {
 		name string
 		data map[int][]Level
-		want *EscalationLevels
+		want map[int]Level
 	}{
 		{
-			name: "Test with empty data",
+			name: "single event with single level",
+			data: map[int][]Level{1: {Emergenza}},
+			want: map[int]Level{1: Emergenza},
+		},
+		{
+			name: "single event with multiple levels",
+			data: map[int][]Level{1: {Emergenza, Allarme}},
+			want: map[int]Level{1: Emergenza},
+		},
+		{
+			name: "multiple events with multiple levels",
+			data: map[int][]Level{1: {Emergenza, Allarme}, 2: {Incidente, Allarme}},
+			want: map[int]Level{1: Emergenza, 2: Incidente},
+		},
+		{
+			name: "no events",
 			data: map[int][]Level{},
-			want: NewEscalationLevels(),
-		},
-		{
-			name: "Test with non-empty data",
-			data: map[int][]Level{1: {Allarme, Emergenza}, 2: {Incidente}},
-			want: &EscalationLevels{Levels: map[int]Level{1: Emergenza, 2: Incidente}},
-		},
-		{
-			name: "Test with single event, multiple levels",
-			data: map[int][]Level{5: {Emergenza, Incidente, Allarme}},
-			want: &EscalationLevels{Levels: map[int]Level{5: Incidente}},
+			want: map[int]Level{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewEscalationLevelsFromData(tt.data); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewEscalationLevelsFromData() = %v, want %v", got, tt.want)
+			escalationLevelOnce = sync.Once{}
+			got := GetEscalationLevelsInstance(tt.data)
+			if !reflect.DeepEqual(got.Levels, tt.want) {
+				t.Errorf("GetEscalationLevelsInstance() = %v, want %v", got.Levels, tt.want)
 			}
 		})
 	}
@@ -131,76 +138,6 @@ func TestConvertDbResultToData(t *testing.T) {
 			} else {
 				if !reflect.DeepEqual(got, tc.out) {
 					t.Fatalf("expected output %#v,  got %#v", tc.out, got)
-				}
-			}
-		})
-	}
-}
-
-func TestAdd(t *testing.T) {
-	tests := []struct {
-		name       string
-		initData   map[int][]Level
-		addEvent   int
-		addLevel   Level
-		outputData map[int][]Level
-	}{
-		{
-			name:     "Initial Empty",
-			initData: map[int][]Level{},
-			addEvent: 1,
-			addLevel: Allarme,
-			outputData: map[int][]Level{
-				1: {Allarme},
-			},
-		},
-		{
-			name: "Add To Existing",
-			initData: map[int][]Level{
-				1: {Allarme},
-			},
-			addEvent: 1,
-			addLevel: Emergenza,
-			outputData: map[int][]Level{
-				1: {Emergenza},
-			},
-		},
-		{
-			name: "Add Lower",
-			initData: map[int][]Level{
-				1: {Incidente},
-			},
-			addEvent: 1,
-			addLevel: Emergenza,
-			outputData: map[int][]Level{
-				1: {Incidente},
-			},
-		},
-		{
-			name: "Add New",
-			initData: map[int][]Level{
-				1: {Emergenza},
-			},
-			addEvent: 2,
-			addLevel: Allarme,
-			outputData: map[int][]Level{
-				1: {Emergenza},
-				2: {Allarme},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			el := NewEscalationLevelsFromData(tt.initData)
-			el.Add(tt.addEvent, tt.addLevel)
-
-			// Loop through all levels in tt.outputData
-			for e, levels := range tt.outputData {
-				for idx, l := range levels {
-					if got, exist := el.Levels[e]; !exist || got != l {
-						t.Errorf("Event %d: expected level %q at index %d, got level %q", e, l, idx, got)
-					}
 				}
 			}
 		})
@@ -302,7 +239,7 @@ func TestEscalation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// NewEscalationLevelsFromData() is assumed to be like NewEscalationLevels() only
+			// GetEscalationLevelsInstance() is assumed to be like NewEscalationLevels() only
 			el := NewEscalationLevels()
 			el.Add(tt.eventNum, tt.initLevel)
 
@@ -365,7 +302,7 @@ func TestDeescalation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// NewEscalationLevelsFromData() is assumed to be like NewEscalationLevels() only
+			// GetEscalationLevelsInstance() is assumed to be like NewEscalationLevels() only
 			el := NewEscalationLevels()
 			el.Add(tt.eventNum, tt.initLevel)
 
@@ -617,6 +554,56 @@ func TestAddNewEvent(t *testing.T) {
 			tcm.AddNewEvent(tt.eventNumber, tt.numberOfTasks)
 			if !reflect.DeepEqual(tcm.Data, tt.expectedData) {
 				t.Errorf("Expected %+v, but got %+v", tt.expectedData, tcm.Data)
+			}
+		})
+
+	}
+}
+
+func TestAddEscalation(t *testing.T) {
+	type args struct {
+		eventNumber int
+		level       Level
+	}
+	tests := []struct {
+		name       string
+		fields     *EscalationLevels
+		args       args
+		wantLevels map[int]Level
+	}{
+		{
+			name:   "Add new level",
+			fields: NewEscalationLevels(),
+			args: args{
+				eventNumber: 1,
+				level:       Allarme,
+			},
+			wantLevels: map[int]Level{1: Allarme},
+		},
+		{
+			name:   "Update existing level",
+			fields: GetEscalationLevelsInstance(map[int][]Level{1: {Allarme}}),
+			args: args{
+				eventNumber: 1,
+				level:       Emergenza,
+			},
+			wantLevels: map[int]Level{1: Emergenza},
+		},
+		{
+			name:   "Add lower level",
+			fields: GetEscalationLevelsInstance(map[int][]Level{1: {Emergenza}}),
+			args: args{
+				eventNumber: 1,
+				level:       Allarme,
+			},
+			wantLevels: map[int]Level{1: Emergenza},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.fields.Add(tt.args.eventNumber, tt.args.level)
+			if !reflect.DeepEqual(tt.fields.Levels, tt.wantLevels) {
+				t.Errorf("EscalationLevels.Add() Levels = %v, want %v", tt.fields.Levels, tt.wantLevels)
 			}
 		})
 	}
