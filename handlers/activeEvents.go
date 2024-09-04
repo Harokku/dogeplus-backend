@@ -34,10 +34,6 @@ type updateEventRequest struct {
 // If the request is successful, it returns a JSON response with the "Result" field set to "Events Created".
 // repos is a pointer to a database.Repositories struct that contains the repositories for managing tasks and active events.
 // ctx is a pointer to a fiber.Ctx object representing the HTTP request context.
-// Example usage:
-//
-//	repos := &database.Repositories{...}
-//	app.Post("/events", CreateNewEvent(repos))
 func CreateNewEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body eventRequest
@@ -82,11 +78,6 @@ func CreateNewEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 //
 // repos is a pointer to a database.Repositories struct that contains the repositories for managing tasks and active events.
 // ctx is a pointer to a fiber.Ctx object representing the HTTP request context.
-//
-// Example usage:
-//
-//	repos := &database.Repositories{...}
-//	app.Get("/event", GetSingleEvent(repos))
 func GetSingleEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body eventRequest
@@ -211,11 +202,6 @@ func GetSpecificEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 // and the updated event information in the "Events" field.
 // repos is a pointer to a database.Repositories struct that contains the repositories for managing active events.
 // ctx is a pointer to a fiber.Ctx object representing the HTTP request context.
-//
-// Example usage:
-//
-// repos := &database.Repositories{...}
-// app.Put("/event-task", UpdateEventTask(repos))
 func UpdateEventTask(repos *database.Repositories, cm *broadcast.ConnectionManager) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body updateEventRequest
