@@ -52,3 +52,9 @@ func GetTaskCompletionInfoForKey(c *fiber.Ctx) error {
 		"error": "Event not found",
 	})
 }
+
+func GetAllEscalationLevels(c *fiber.Ctx) error {
+	escalationLevels := database.GetEscalationLevelsInstance(nil)
+	levelData := escalationLevels.GetLevels()
+	return c.JSON(levelData)
+}

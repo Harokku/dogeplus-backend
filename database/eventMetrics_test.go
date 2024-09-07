@@ -608,3 +608,40 @@ func TestAddEscalation(t *testing.T) {
 		})
 	}
 }
+
+func TestGetLevels(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields *EscalationLevels
+		want   map[int]Level
+	}{
+		{
+			name:   "empty levels",
+			fields: NewEscalationLevels(),
+			want:   map[int]Level{},
+		},
+		{
+			name:   "single level",
+			fields: getEscalationLevelsInstanceWithReset(map[int][]Level{1: {Allarme}}),
+			want:   map[int]Level{1: Allarme},
+		},
+		{
+			name:   "multiple levels",
+			fields: getEscalationLevelsInstanceWithReset(map[int][]Level{1: {Allarme}, 2: {Emergenza}}),
+			want:   map[int]Level{1: Allarme, 2: Emergenza},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.fields.GetLevels(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("EscalationLevels.GetLevels() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// This helper function ensures a new instance of EscalationLevels is created with the provided data.
+func getEscalationLevelsInstanceWithReset(data map[int][]Level) *EscalationLevels {
+	escalationLevelOnce = sync.Once{}
+	return GetEscalationLevelsInstance(data)
+}

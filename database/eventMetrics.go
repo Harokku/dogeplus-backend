@@ -195,6 +195,19 @@ func convertDbResultToData(dbData []ActiveEvents) (map[int][]Level, error) {
 	return result, nil
 }
 
+// GetLevels returns a thread-safe copy of the Levels map, ensuring the original map cannot be altered by the caller.
+func (el *EscalationLevels) GetLevels() map[int]Level {
+	el.mu.RLock()
+	defer el.mu.RUnlock()
+
+	// Creating a copy of the map to ensure thread-safety and prevent modification by caller.
+	copyLevels := make(map[int]Level, len(el.Levels))
+	for k, v := range el.Levels {
+		copyLevels[k] = v
+	}
+	return copyLevels
+}
+
 // Add adds a new escalation level for a specific event number to the EscalationLevels struct.
 // If the event number is not already present in the levels map or the new level is higher than the existing level,
 // the new level is added to the levels map.
