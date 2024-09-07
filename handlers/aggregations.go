@@ -67,12 +67,75 @@ func GetTaskCompletionInfoForKey(c *fiber.Ctx) error {
 
 //region EscalationLevels
 
+// EscalateRequest Request payload structure
+type EscalateRequest struct {
+	EventNumber int            `json:"eventNumber"`
+	NewLevel    database.Level `json:"newLevel"`
+}
+
 // GetAllEscalationLevels handles the HTTP request to retrieve all escalation levels.
 // It fetches the escalation levels from the database and returns them as a JSON response.
 func GetAllEscalationLevels(c *fiber.Ctx) error {
 	escalationLevels := database.GetEscalationLevelsInstance(nil)
 	levelData := escalationLevels.GetLevels()
 	return c.JSON(levelData)
+}
+
+// PostEscalate handles the escalation of an event to a new level based on the request payload.
+// It parses the request body into an EscalateRequest, retrieves the escalation levels instance,
+// and calls the Escalate method to update the event's level if the new level is valid.
+// Returns a JSON response indicating success or error based on the outcome.
+func PostEscalate(c *fiber.Ctx) error {
+	// Parse request body
+	var request EscalateRequest
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Failed to parse request",
+		})
+	}
+
+	// Get escalation map instance
+	escalationLevels := database.GetEscalationLevelsInstance(nil)
+
+	// Call the Escalate method
+	err := escalationLevels.Escalate(request.EventNumber, request.NewLevel)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// Return success response
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Event level escalated successfully",
+	})
+}
+
+// PostDeEscalate handles de-escalation of an event level based on the provided request data and updates the escalation map.
+func PostDeEscalate(c *fiber.Ctx) error {
+	// Parse request body
+	var request EscalateRequest
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Failed to parse request",
+		})
+	}
+
+	// Get escalation map instance
+	escalationLevels := database.GetEscalationLevelsInstance(nil)
+
+	// Call the Escalate method
+	err := escalationLevels.Deescalate(request.EventNumber, request.NewLevel)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// Return success response
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Event level deescalated successfully",
+	})
 }
 
 //endregion
