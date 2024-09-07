@@ -427,3 +427,26 @@ func (e *ActiveEventsRepository) DeleteEvent(eventNumber int, centralId string) 
 	taskCompletionMap.DeleteEvent(eventNumber)
 	return nil
 }
+
+// GetRawEscalationLevels retrieves distinct event numbers and their associated escalation levels from the active_events table.
+// It returns a slice of ActiveEvents and an error if any occurs during the database query or scanning process.
+func (e *ActiveEventsRepository) GetRawEscalationLevels() ([]ActiveEvents, error) {
+	rows, err := e.db.Query(`SELECT DISTINCT event_number, escalation_level FROM active_events`)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var events []ActiveEvents
+
+	for rows.Next() {
+		var event ActiveEvents
+		if err := rows.Scan(&event.EventNumber, &event.EscalationLevel); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+
+	return events, nil
+}

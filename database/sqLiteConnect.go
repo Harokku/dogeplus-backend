@@ -133,9 +133,10 @@ func createTables(db *sql.DB) error {
 
 // Repositories represents a collection of different repositories for managing tasks and active events.
 type Repositories struct {
-	Tasks                     *TaskRepository
-	ActiveEvents              *ActiveEventsRepository
-	TaskCompletionAggregation *TaskCompletionMap
+	Tasks                       *TaskRepository
+	ActiveEvents                *ActiveEventsRepository
+	TaskCompletionAggregation   *TaskCompletionMap
+	EscalationLevelsAggregation *EscalationLevels
 }
 
 // NewRepositories initializes a new instance of Repositories with the provided *sql.DB object.
@@ -152,8 +153,24 @@ func NewRepositories(db *sql.DB) *Repositories {
 		log.Fatal(err)
 	}
 
+	// Get raw escalation levels from db
+	initialRawEscalationLevel, err := repos.ActiveEvents.GetRawEscalationLevels()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Convert db data to aggregation raw format
+	convertedEscalationData, err := convertDbResultToData(initialRawEscalationLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Initialize actual aggregation keeping only higher escalation level
+	initialEscalationLevelsAggregation := GetEscalationLevelsInstance(convertedEscalationData)
+
 	// initialize task aggregation repo
 	repos.TaskCompletionAggregation = GetTaskCompletionMapInstance(initialTaskAggregation)
+	repos.EscalationLevelsAggregation = initialEscalationLevelsAggregation
 
 	return repos
 }

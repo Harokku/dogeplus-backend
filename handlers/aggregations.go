@@ -10,6 +10,12 @@ type taskCompletionInfo struct {
 	Total     int `json:"total"`
 }
 
+// -------------------------
+// Task completion info functions
+// -------------------------
+
+//region TaskCompletionInfo
+
 // GetAllTaskCompletionInfo returns a JSON representation of the task completion information for all tasks.
 func GetAllTaskCompletionInfo(c *fiber.Ctx) error {
 	taskMap := database.GetTaskCompletionMapInstance(nil)
@@ -53,8 +59,20 @@ func GetTaskCompletionInfoForKey(c *fiber.Ctx) error {
 	})
 }
 
+//endregion
+
+// -------------------------
+// Escalation levels functions
+// -------------------------
+
+//region EscalationLevels
+
+// GetAllEscalationLevels handles the HTTP request to retrieve all escalation levels.
+// It fetches the escalation levels from the database and returns them as a JSON response.
 func GetAllEscalationLevels(c *fiber.Ctx) error {
 	escalationLevels := database.GetEscalationLevelsInstance(nil)
 	levelData := escalationLevels.GetLevels()
 	return c.JSON(levelData)
 }
+
+//endregion
