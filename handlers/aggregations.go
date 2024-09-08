@@ -198,7 +198,28 @@ func GetAllEscalationDetails(repos *database.Repositories) func(c *fiber.Ctx) er
 
 		return c.Status(fiber.StatusOK).JSON(
 			fiber.Map{
-				"result": "Retrieved al monitored events",
+				"result": "Retrieved all monitored events",
+				"length": len(overview),
+				"data":   overview,
+			},
+		)
+	}
+}
+
+// GetEscalationDetailsByCentralId fetches the overview details for a given central ID from the database.
+func GetEscalationDetailsByCentralId(repos *database.Repositories) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		overview, err := repos.Overview.GetOverviewByCentralId(c.Params("central_id"))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":  err.Error(),
+				"detail": err.Error(),
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(
+			fiber.Map{
+				"result": "Retrieved all monitored events",
 				"length": len(overview),
 				"data":   overview,
 			},

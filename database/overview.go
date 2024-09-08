@@ -58,7 +58,7 @@ func (ov *OverviewRepository) GetAllOverview() ([]Overview, error) {
 
 // GetOverviewById retrieves an overview record by its event ID from the database.
 func (ov *OverviewRepository) GetOverviewById(eventId int) (Overview, error) {
-	query := `SELECT uuid, central_id,  event_number, location, location_detail, type, level FROM overview WHERE event_number = ?`
+	query := `SELECT uuid, central_id, event_number, location, location_detail, type, level FROM overview WHERE event_number = ?`
 
 	row := ov.db.QueryRow(query, eventId)
 
@@ -70,6 +70,30 @@ func (ov *OverviewRepository) GetOverviewById(eventId int) (Overview, error) {
 	}
 
 	return overview, nil
+}
+
+// GetOverviewByCentralId retrieves an overview by the provided central ID from the database.
+func (ov *OverviewRepository) GetOverviewByCentralId(centralId string) ([]Overview, error) {
+	query := `SELECT uuid, central_id, event_number, location, location_detail, type, level FROM overview WHERE central_id = ?`
+
+	rows, err := ov.db.Query(query, centralId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var overviews []Overview
+
+	// Scan rows to return slice
+	for rows.Next() {
+		var overview Overview
+		if err := rows.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level); err != nil {
+			return nil, err
+		}
+		overviews = append(overviews, overview)
+	}
+
+	return overviews, nil
 }
 
 // UpdateLevelByEventNumber updates the Level column of a specified EventNumber with the passed-in value.

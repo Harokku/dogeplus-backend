@@ -47,6 +47,7 @@ func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.Con
 	aggregationEscalation := v1.Group("/escalation_aggregation")
 	aggregationEscalation.Get("/", handlers.GetAllEscalationLevels)
 	aggregationEscalation.Get("/details", handlers.GetAllEscalationDetails(repos))
+	aggregationEscalation.Get("/details/:central_id", handlers.GetEscalationDetailsByCentralId(repos))
 	aggregationEscalation.Post("/escalate", handlers.PostEscalate(repos))
 	aggregationEscalation.Post("/deescalate", handlers.PostDeEscalate(repos))
 
