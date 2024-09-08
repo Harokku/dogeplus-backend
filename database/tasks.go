@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const PRO22 = "pro22"
+
 // Task represents a task with its properties.
 type Task struct {
 	ID              int    `json:"ID,omitempty"`
@@ -105,6 +107,61 @@ func (t *TaskRepository) GetByCategoriesAndEscalationLevels(categories []string,
 	}
 	query := fmt.Sprintf(`SELECT id, priority, title, description, role, category, escalation_level FROM tasks WHERE category IN (%s) AND escalation_level IN (%s) ORDER BY priority`,
 		strings.Join(catPlaceholders, ","), strings.Join(escPlaceholders, ","))
+
+	return t.executeAndScanResults(query, args)
+}
+
+// GetGyCategoryAndEscalationLevel retrieves tasks by category and escalation level range.
+// It takes a category, starting escalation, and final escalation as input and returns a list of Task objects and an error.
+// The method validates the escalation levels and constructs an SQL query based on the input parameters.
+func (t *TaskRepository) GetGyCategoryAndEscalationLevel(category, startingEscalation, finalEscalation string) ([]Task, error) {
+	var tasks []Task
+
+	// The escalation levels ranked in order
+	rankedLevels := GetEscalationLevels()
+	levelMap := make(map[string]int)
+	for i, level := range rankedLevels {
+		levelMap[level] = i
+	}
+
+	startIdx, startOk := levelMap[strings.ToLower(startingEscalation)]
+	endIdx, endOk := levelMap[strings.ToLower(finalEscalation)]
+
+	if !startOk || !endOk {
+		return nil, fmt.Errorf("invalid escalation levels: %s or %s", startingEscalation, finalEscalation)
+	}
+
+	if startIdx == endIdx {
+		return nil, fmt.Errorf("starting and final escalation levels cannot be the same")
+	}
+
+	// Adjust the indices for correct slicing
+	startIdx++
+	if startIdx >= len(rankedLevels) || startIdx > endIdx {
+		return tasks, nil
+	}
+
+	// Construct the query
+	query := `
+		SELECT id, priority, title, description, role, category, escalation_level 
+		FROM tasks 
+		WHERE (LOWER(category) = ? OR LOWER(category) = LOWER(?))
+		AND LOWER(escalation_level) IN (?);
+	`
+
+	// Prepare the escalation levels for the query
+	escLevels := rankedLevels[startIdx : endIdx+1]
+	escPlaceholders := make([]string, len(escLevels))
+	args := make([]interface{}, len(escLevels)+2)
+	for i, level := range escLevels {
+		escPlaceholders[i] = "?"
+		args[i+2] = level
+	}
+
+	args[0] = PRO22
+	args[1] = category
+
+	query = fmt.Sprintf(strings.Replace(query, "IN (?)", "IN ("+strings.Join(escPlaceholders, ",")+")", 1))
 
 	return t.executeAndScanResults(query, args)
 }

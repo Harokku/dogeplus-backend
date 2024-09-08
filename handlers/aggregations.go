@@ -81,61 +81,129 @@ func GetAllEscalationLevels(c *fiber.Ctx) error {
 	return c.JSON(levelData)
 }
 
-// PostEscalate handles the escalation of an event to a new level based on the request payload.
-// It parses the request body into an EscalateRequest, retrieves the escalation levels instance,
-// and calls the Escalate method to update the event's level if the new level is valid.
-// Returns a JSON response indicating success or error based on the outcome.
-func PostEscalate(c *fiber.Ctx) error {
-	// Parse request body
-	var request EscalateRequest
-	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse request",
+// PostEscalate handles HTTP POST requests to escalate an event's level.
+// It reads the request body to get the eventNumber and newLevel, escalates the event level,
+// and updates the overview. It returns a JSON response indicating success or any error.
+func PostEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		// Parse request body
+		var request EscalateRequest
+		if err := c.BodyParser(&request); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Failed to parse request",
+			})
+		}
+
+		// Get escalation map instance
+		escalationLevels := database.GetEscalationLevelsInstance(nil)
+
+		// Get actual escalation levels
+		actualLevels := escalationLevels.GetLevels()
+		oldLevel := actualLevels[request.EventNumber]
+
+		// Call the Escalate method
+		err := escalationLevels.Escalate(request.EventNumber, request.NewLevel)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Sync overview with new escalation level
+		err = repos.Overview.UpdateLevelByEventNumber(request.EventNumber, request.NewLevel)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Get actual event overview snapshot
+		actualOverview, err := repos.Overview.GetOverviewById(request.EventNumber)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Get new level tasks
+		newTasks, err := repos.Tasks.GetGyCategoryAndEscalationLevel(actualOverview.Type, string(oldLevel), string(request.NewLevel))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Add new tasks to active events
+		err = repos.ActiveEvents.CreateFromTaskList(newTasks, actualOverview.EventNumber, actualOverview.CentralId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Return success response
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"message": "Event level escalated successfully",
 		})
 	}
-
-	// Get escalation map instance
-	escalationLevels := database.GetEscalationLevelsInstance(nil)
-
-	// Call the Escalate method
-	err := escalationLevels.Escalate(request.EventNumber, request.NewLevel)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	// Return success response
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Event level escalated successfully",
-	})
 }
 
 // PostDeEscalate handles de-escalation of an event level based on the provided request data and updates the escalation map.
-func PostDeEscalate(c *fiber.Ctx) error {
-	// Parse request body
-	var request EscalateRequest
-	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Failed to parse request",
+func PostDeEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		// Parse request body
+		var request EscalateRequest
+		if err := c.BodyParser(&request); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Failed to parse request",
+			})
+		}
+
+		// Get escalation map instance
+		escalationLevels := database.GetEscalationLevelsInstance(nil)
+
+		// Call the Escalate method
+		err := escalationLevels.Deescalate(request.EventNumber, request.NewLevel)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		// Sync overview with new escalation level
+		err = repos.Overview.UpdateLevelByEventNumber(request.EventNumber, request.NewLevel)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Return success response
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"message": "Event level deescalated successfully",
 		})
 	}
+}
 
-	// Get escalation map instance
-	escalationLevels := database.GetEscalationLevelsInstance(nil)
+// GetAllEscalationDetails retrieves all escalation details from the database and returns them in the HTTP response.
+func GetAllEscalationDetails(repos *database.Repositories) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		// Get overview from db
+		overview, err := repos.Overview.GetAllOverview()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":  err.Error(),
+				"detail": err.Error(),
+			})
+		}
 
-	// Call the Escalate method
-	err := escalationLevels.Deescalate(request.EventNumber, request.NewLevel)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return c.Status(fiber.StatusOK).JSON(
+			fiber.Map{
+				"result": "Retrieved al monitored events",
+				"length": len(overview),
+				"data":   overview,
+			},
+		)
 	}
-
-	// Return success response
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"message": "Event level deescalated successfully",
-	})
 }
 
 //endregion

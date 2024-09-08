@@ -102,15 +102,20 @@ func createTables(db *sql.DB) error {
 			ip_address TEXT DEFAULT '0.0.0.0',
 			timestamp TEXT,
 			escalation_level TEXT CHECK (escalation_level in ('allarme', 'emergenza', 'incidente')))`,
-		// Indexes for active events table
-		`CREATE INDEX IF NOT EXISTS idx_active_events_central_id ON active_events(central_id)`,
-		// Trigger for active events table
-		//`CREATE TRIGGER IF NOT EXISTS update_timestamp
-		//	BEFORE UPDATE OF status, modified_by ON active_events
-		//	FOR EACH ROW
-		//BEGIN
-		//	UPDATE active_events SET timestamp = (strftime('%Y-%m-%d %H:%M:%f', 'now')) WHERE uuid = OLD.uuid;
-		//END`,
+
+		// Overview table
+		`create table IF NOT EXISTS overview(
+			uuid            text    not null
+				constraint overview_pk
+				primary key,
+			central_id      text    not null,
+			event_number    integer not null
+				constraint event_number_unique_ck
+				unique,
+			location        text    not null,
+			location_detail text,
+			type            text    not null,
+			level			text 	not null)`,
 	}
 
 	// Execute each command within the transaction
@@ -135,6 +140,7 @@ func createTables(db *sql.DB) error {
 type Repositories struct {
 	Tasks                       *TaskRepository
 	ActiveEvents                *ActiveEventsRepository
+	Overview                    *OverviewRepository
 	TaskCompletionAggregation   *TaskCompletionMap
 	EscalationLevelsAggregation *EscalationLevels
 }
@@ -145,6 +151,7 @@ func NewRepositories(db *sql.DB) *Repositories {
 	repos := &Repositories{
 		Tasks:        NewTaskRepository(db),
 		ActiveEvents: NewActiveEventRepository(db),
+		Overview:     NewOverviewRepository(db),
 	}
 
 	// initialize aggregation map using data from db trough repos

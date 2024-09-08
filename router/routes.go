@@ -28,6 +28,7 @@ func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.Con
 	// Tasks routes
 	tasks := v1.Group("/tasks")
 	tasks.Get("/", handlers.GetTasks(repos))
+	tasks.Post("/", handlers.GetTasksForEscalation(repos))
 
 	// ActiveEvents routes
 	activeEvents := v1.Group("/active-events")
@@ -45,8 +46,9 @@ func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.Con
 	// Event Escalation routes
 	aggregationEscalation := v1.Group("/escalation_aggregation")
 	aggregationEscalation.Get("/", handlers.GetAllEscalationLevels)
-	aggregationEscalation.Post("/escalate", handlers.PostEscalate)
-	aggregationEscalation.Post("/deescalate", handlers.PostDeEscalate)
+	aggregationEscalation.Get("/details", handlers.GetAllEscalationDetails(repos))
+	aggregationEscalation.Post("/escalate", handlers.PostEscalate(repos))
+	aggregationEscalation.Post("/deescalate", handlers.PostDeEscalate(repos))
 
 	// Ws Routes
 	websocket := v1.Group("/ws")
