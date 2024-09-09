@@ -86,12 +86,16 @@ func PostNewOverview(repos *database.Repositories) func(c *fiber.Ctx) error {
 			})
 		}
 
+		// Add the overview
 		err := repos.Overview.Add(request)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+
+		// Sync escalation levels in memory map
+		repos.EscalationLevelsAggregation.Add(request.EventNumber, database.Level(request.Level))
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"message": "Overview added successfully",
