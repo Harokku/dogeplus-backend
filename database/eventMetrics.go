@@ -54,9 +54,10 @@ func (tcm *TaskCompletionMap) UpdateEventStatus(eventNumber int, status string) 
 	if data, ok := tcm.Data[eventNumber]; ok {
 		if status == "done" {
 			data.Completed++
-		} else if status == "working" || status == "notdone" {
-			data.Completed--
 		}
+		//} else if status == "working" || status == "notdone" {
+		//	data.Completed--
+		//}
 		tcm.Data[eventNumber] = data
 	}
 }

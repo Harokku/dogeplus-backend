@@ -14,7 +14,7 @@ type taskCompletionInfo struct {
 // Task completion info functions
 // -------------------------
 
-//region TaskCompletionInfo
+// region TaskCompletionInfo
 
 // GetAllTaskCompletionInfo returns a JSON representation of the task completion information for all tasks.
 func GetAllTaskCompletionInfo(c *fiber.Ctx) error {
@@ -71,6 +71,7 @@ func GetTaskCompletionInfoForKey(c *fiber.Ctx) error {
 type EscalateRequest struct {
 	EventNumber int            `json:"eventNumber"`
 	NewLevel    database.Level `json:"newLevel"`
+	Direction   string         `json:"direction"`
 }
 
 // GetAllEscalationLevels handles the HTTP request to retrieve all escalation levels.
@@ -140,6 +141,10 @@ func PostEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
 				"error": err.Error(),
 			})
 		}
+
+		// Keep in memory completion metrics cache in sync
+		taskCompletionInstance := database.GetTaskCompletionMapInstance(nil)
+		taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(newTasks))
 
 		// Return success response
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
