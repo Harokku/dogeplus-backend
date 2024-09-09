@@ -11,9 +11,10 @@ import (
 )
 
 type eventRequest struct {
-	Categories  []string `json:"categories"`
-	EventNumber int      `json:"event_number"`
-	CentralId   string   `json:"central_id"`
+	Categories      []string `json:"categories"`
+	EventNumber     int      `json:"event_number"`
+	CentralId       string   `json:"central_id"`
+	EscalationLevel string   `json:"escalation_level"`
 }
 
 type updateEventRequest struct {
@@ -56,8 +57,22 @@ func CreateNewEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to retrieve tasks")
 		}
 
+		// Filter tasks based on escalation level
+		var filteredTasks []database.Task
+		escalationPriority := map[string]int{
+			"allarme":   1,
+			"emergenza": 2,
+			"incidente": 3,
+		}
+
+		for _, task := range taskList {
+			if escalationPriority[task.EscalationLevel] <= escalationPriority[body.EscalationLevel] {
+				filteredTasks = append(filteredTasks, task)
+			}
+		}
+
 		// Create new event from taskList
-		err = repos.ActiveEvents.CreateFromTaskList(taskList, body.EventNumber, body.CentralId)
+		err = repos.ActiveEvents.CreateFromTaskList(filteredTasks, body.EventNumber, body.CentralId)
 		if err != nil {
 			// Error while creating new event
 			log.Errorf("Error creating event: %s\n", err)
