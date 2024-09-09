@@ -74,6 +74,31 @@ type EscalateRequest struct {
 	Direction   string         `json:"direction"`
 }
 
+// PostNewOverview handles the posting of new overview records to the database.
+// It parses the request body, validates it, and uses the repository to add the overview.
+func PostNewOverview(repos *database.Repositories) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		// Parse request body
+		var request database.Overview
+		if err := c.BodyParser(&request); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Failed to parse request",
+			})
+		}
+
+		err := repos.Overview.Add(request)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"message": "Overview added successfully",
+		})
+	}
+}
+
 // GetAllEscalationLevels handles the HTTP request to retrieve all escalation levels.
 // It fetches the escalation levels from the database and returns them as a JSON response.
 func GetAllEscalationLevels(c *fiber.Ctx) error {
@@ -145,6 +170,22 @@ func PostEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
 		// Keep in memory completion metrics cache in sync
 		taskCompletionInstance := database.GetTaskCompletionMapInstance(nil)
 		taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(newTasks))
+
+		// build a map for realtime update
+		//updatedEscalation := fiber.Map{
+		//	"Result":      "Escalation level updated",
+		//	"EventNumber": request.EventNumber,
+		//	"AddedTasks":  len(newTasks),
+		//}
+		//
+		//// Send broadcast response via connection manager in JSON format
+		//// If error skip broadcast phase
+		//updatedEscalationJson, err := json.Marshal(updatedEscalation)
+		//if err != nil {
+		//	log.Errorf("Failed to marshal updated escalation level to JSON: %v\n", err)
+		//} else {
+		//	cm.Broadcast(updatedEscalationJson)
+		//}
 
 		// Return success response
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
