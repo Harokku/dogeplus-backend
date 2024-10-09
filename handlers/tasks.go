@@ -6,9 +6,10 @@ import (
 )
 
 type EscalationRequest struct {
-	Category   string `json:"category"`
-	StartLevel string `json:"start_level"`
-	EndLevel   string `json:"end_level"`
+	Category      string `json:"category"`
+	StartLevel    string `json:"start_level"`
+	EndLevel      string `json:"end_level"`
+	IncidentLevel string `json:"incident_level"`
 }
 
 // GetTasks returns a handler function that retrieves distinct categories from the database
@@ -56,7 +57,7 @@ func GetTasksForEscalation(repos *database.Repositories) func(ctx *fiber.Ctx) er
 		}
 
 		// Get missing tasks fro db
-		categoriesList, err := repos.Tasks.GetGyCategoryAndEscalationLevel(escalationRequest.Category, escalationRequest.StartLevel, escalationRequest.EndLevel)
+		categoriesList, err := repos.Tasks.GetGyCategoryAndEscalationLevel(escalationRequest.Category, escalationRequest.StartLevel, escalationRequest.EndLevel, escalationRequest.IncidentLevel)
 		if err != nil {
 			return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":  "Failed to get tasks",

@@ -84,7 +84,8 @@ func createTables(db *sql.DB) error {
 			description TEXT, 
 			role TEXT, 
 			category TEXT,
-			escalation_level TEXT CHECK ( escalation_level IN ('allarme','emergenza','incidente')))`,
+			escalation_level TEXT CHECK ( escalation_level IN ('allarme','emergenza','incidente')),
+			incident_level TEXT CHECK ( incident_level IN ('bianca', 'verde', 'gialla', 'rossa')))`,
 		// No trigger for task table
 
 		// Active events table

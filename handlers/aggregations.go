@@ -69,9 +69,10 @@ func GetTaskCompletionInfoForKey(c *fiber.Ctx) error {
 
 // EscalateRequest Request payload structure
 type EscalateRequest struct {
-	EventNumber int            `json:"eventNumber"`
-	NewLevel    database.Level `json:"newLevel"`
-	Direction   string         `json:"direction"`
+	EventNumber   int            `json:"eventNumber"`
+	NewLevel      database.Level `json:"newLevel"`
+	Direction     string         `json:"direction"`
+	IncidentLevel string         `json:"incidentLevel"`
 }
 
 // PostNewOverview handles the posting of new overview records to the database.
@@ -156,7 +157,7 @@ func PostEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
 		}
 
 		// Get new level tasks
-		newTasks, err := repos.Tasks.GetGyCategoryAndEscalationLevel(actualOverview.Type, string(oldLevel), string(request.NewLevel))
+		newTasks, err := repos.Tasks.GetGyCategoryAndEscalationLevel(actualOverview.Type, string(oldLevel), string(request.NewLevel), request.IncidentLevel)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
