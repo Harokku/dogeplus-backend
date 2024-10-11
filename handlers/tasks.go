@@ -1,8 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"dogeplus-backend/database"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"github.com/xuri/excelize/v2"
+	"io"
+	"path/filepath"
 )
 
 type EscalationRequest struct {
@@ -10,6 +15,67 @@ type EscalationRequest struct {
 	StartLevel    string `json:"start_level"`
 	EndLevel      string `json:"end_level"`
 	IncidentLevel string `json:"incident_level"`
+}
+
+// UploadMainTasksFile handles the upload of an .xlsx file containing main tasks, resets the tasks table, and adds new tasks.
+func UploadMainTasksFile(repos *database.Repositories) func(ctx *fiber.Ctx) error {
+	return func(ctx *fiber.Ctx) error {
+		// Access the file:
+		fileHeader, err := ctx.FormFile("file")
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).SendString(fmt.Sprintf("Could not access file: %v", err))
+		}
+
+		// Open the file
+		file, err := fileHeader.Open()
+		if err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("Could not open file: %v", err))
+		}
+		defer file.Close()
+
+		// Ensure the uploaded file is an xlsx file
+		if filepath.Ext(fileHeader.Filename) != ".xlsx" {
+			return ctx.Status(fiber.StatusBadRequest).SendString("Invalid file type: only .xlsx files are accepted")
+		}
+
+		// Read file into memory
+		fileBytes, err := io.ReadAll(file)
+		if err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("Failed to read file: %v", err))
+		}
+
+		// Open the file with excelize
+		excelFile, err := excelize.OpenReader(bytes.NewReader(fileBytes))
+		if err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("Failed to open xlsx file: %v", err))
+		}
+
+		// Parse the xlsx file into tasks
+		tasks, err := database.ParseXLSXToTasks(excelFile)
+		if err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("Failed to parse xlsx file to tasks: %v", err))
+		}
+
+		// Use a transaction to ensure atomicity
+		if err := repos.Tasks.WithTransaction(func(tx *database.TaskRepositoryTransaction) error {
+			// Drop the existing tasks table
+			if err := tx.DropTasksTable(); err != nil {
+				return fmt.Errorf("failed to drop tasks table: %v", err)
+			}
+
+			// Add tasks to database
+			if err := tx.BulkAdd(tasks); err != nil {
+				return fmt.Errorf("failed to add tasks to database: %v", err)
+			}
+
+			return nil
+		}); err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).SendString(err.Error())
+		}
+
+		// Respond to the request
+		return ctx.SendString("File processed and tasks table reset successfully.")
+	}
 }
 
 // GetTasks returns a handler function that retrieves distinct categories from the database

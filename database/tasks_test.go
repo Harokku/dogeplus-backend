@@ -167,6 +167,15 @@ func TestParseXLSXToTasks(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "MultipleTasksLastEmpty",
+			file: filepath.Join(projectRoot, "testdata", "multiple_tasks_last_empty.xlsx"),
+			want: []Task{
+				{Category: "Sheet1", Role: "Medico", Priority: 1, Title: "Title1", Description: "Desc1", EscalationLevel: "el1", IncidentLevel: "il1"},
+				{Category: "Sheet1", Role: "RTT", Priority: 2, Title: "Title2", Description: "Desc2", EscalationLevel: "el2", IncidentLevel: ""},
+			},
+			wantErr: false,
+		},
+		{
 			name:    "NonExistentFile",
 			file:    filepath.Join(projectRoot, "testdata", "non_existent.xlsx"),
 			want:    nil,

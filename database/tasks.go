@@ -34,6 +34,46 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
+// BeginTrans starts a new transaction from the given DB connection.
+func (t *TaskRepository) BeginTrans() (*sql.Tx, error) {
+	tx, err := t.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	return tx, nil
+}
+
+type TaskRepositoryTransaction struct {
+	repo *TaskRepository
+	*sql.Tx
+}
+
+// WithTransaction runs the queries wrapped in a transaction.
+func (t *TaskRepository) WithTransaction(fn func(*TaskRepositoryTransaction) error) error {
+	tx, err := t.BeginTrans()
+	if err != nil {
+		return err
+	}
+
+	trx := &TaskRepositoryTransaction{t, tx}
+
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p) // re-throw panic after Rollback
+		} else if err != nil {
+			_ = tx.Rollback() // err is non-nil; don't change it
+		} else {
+			err = tx.Commit() // err is nil; if Commit returns error update err with commit err
+		}
+	}()
+
+	if err := fn(trx); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetCategories retrieves distinct categories from the "tasks" table in the database.
 // It does not take any input and returns an array of category strings and an error.
 // A query is executed to select distinct categories from the "tasks" table.
@@ -283,34 +323,56 @@ func (t *TaskRepository) executeAndScanResults(query string, args []interface{})
 	return tasks, nil
 }
 
-// BulkAdd inserts multiple tasks into the database.
-// It takes an array of Task objects as input and returns an error.
-// A transaction is started using the database connection.
-// A prepared statement is created to insert a task into the "tasks" table.
-// For each task in the input array, the statement is executed with the task properties as arguments.
-// If any error occurs during the insertion process, the transaction is rolled back and the error is returned.
-// Otherwise, the transaction is committed and the method returns nil.
-func (t *TaskRepository) BulkAdd(tasks []Task) error {
-
-	tx, err := t.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.Prepare("INSERT INTO tasks (priority, title, description, role, category, escalation_level, incident_level) VALUES (?, ?, ?, ?, ?, ?, ?)")
-	if err != nil {
-		return err
-	}
-
+// BulkAdd adds a slice of tasks using the given transaction or connection.
+func (t *TaskRepository) BulkAdd(tx *sql.Tx, tasks []Task) error {
+	var err error
 	for _, task := range tasks {
-		_, err = stmt.Exec(task.Priority, task.Title, task.Description, task.Role, task.Category, task.EscalationLevel, task.IncidentLevel)
+		if tx != nil {
+			_, err = tx.Exec(
+				"INSERT INTO tasks (category, role, priority, title, description,escalation_level,incident_level) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				task.Category, task.Role, task.Priority, task.Title, task.Description, task.EscalationLevel, task.IncidentLevel,
+			)
+		} else {
+			_, err = t.db.Exec(
+				"INSERT INTO tasks (category, role, priority, title, description,escalation_level,incident_level) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				task.Category, task.Role, task.Priority, task.Title, task.Description, task.EscalationLevel, task.IncidentLevel,
+			)
+		}
 		if err != nil {
-			_ = tx.Rollback()
-			return err
+			return fmt.Errorf("failed to insert task: %v", err)
 		}
 	}
+	return nil
+}
 
-	return tx.Commit()
+// ClearTasksTable drops the tasks table using the given transaction or connection.
+func (t *TaskRepository) ClearTasksTable(tx *sql.Tx) error {
+	var err error
+	if tx != nil {
+		_, err = tx.Exec("DELETE FROM tasks")
+		if err != nil {
+			return fmt.Errorf("failed to clear tasks table: %v", err)
+		}
+		_, err = tx.Exec("DELETE FROM sqlite_sequence WHERE name='tasks'")
+	} else {
+		_, err = t.db.Exec("DELETE FROM tasks")
+		if err != nil {
+			return fmt.Errorf("failed to clear tasks table: %v", err)
+		}
+		_, err = t.db.Exec("DELETE FROM sqlite_sequence WHERE name='tasks'")
+	}
+	if err != nil {
+		return fmt.Errorf("failed to reset auto-increment counter: %v", err)
+	}
+	return nil
+}
+
+func (trx *TaskRepositoryTransaction) DropTasksTable() error {
+	return trx.repo.ClearTasksTable(trx.Tx)
+}
+
+func (trx *TaskRepositoryTransaction) BulkAdd(tasks []Task) error {
+	return trx.repo.BulkAdd(trx.Tx, tasks)
 }
 
 // parsePriority converts a priority string to an int, returns 0 if invalid.
@@ -332,6 +394,26 @@ func isBlockEmpty(block []string) bool {
 		}
 	}
 	return true
+}
+
+// padRow ensures the row has at least 'minLength' columns by adding empty strings if necessary.
+func padRow(row []string, minLength int) []string {
+	if len(row) >= minLength {
+		return row
+	}
+	paddedRow := make([]string, minLength)
+	copy(paddedRow, row)
+	return paddedRow
+}
+
+// padBlock ensures a block has exactly 'blockSize' columns by appending empty strings if necessary.
+func padBlock(block []string, blockSize int) []string {
+	if len(block) >= blockSize {
+		return block
+	}
+	paddedBlock := make([]string, blockSize)
+	copy(paddedBlock, block)
+	return paddedBlock
 }
 
 // ParseXLSXToTasks converts an Excel file into a slice of Task instances, parsing data from each sheet and handling errors.
@@ -365,41 +447,34 @@ func ParseXLSXToTasks(f *excelize.File) ([]Task, error) {
 				continue // Skip the first 2 rows
 			}
 
-			// Ensure the row has at least 5 columns (this check should come before any further processing)
-			if len(row) < 5 {
-				continue // Skip rows that don't have at least 5 columns
-			}
-
 			// Iterate in blocks of 5 columns starting from the first block
-			for j := 0; j+5 <= len(row); j += 5 {
-				// Fetch the role from the header row based on the block's starting column
-				role := ""
-				if j < len(headerRow) {
-					role = headerRow[j]
-				}
+			for j := 0; j < len(row); j += 5 {
+				// Ensure there's a block to process
+				block := row[j:min(j+5, len(row))]
 
-				// Ensure there's a full block of 5 columns left to process
-				if j+4 >= len(row) {
-					continue // Skip blocks that don't have 5 columns
-				}
-
-				// Extract the block
-				block := row[j : j+5]
+				// Pad the block to ensure it has exactly 5 columns
+				block = padBlock(block, 5)
 
 				// Skip if the block is empty
 				if isBlockEmpty(block) {
 					continue
 				}
 
+				// Fetch the role from the header row based on the block's starting column
+				role := ""
+				if j < len(headerRow) {
+					role = headerRow[j]
+				}
+
 				// Create a new Task struct with mapped fields
 				task := Task{
 					Category:        sheetName,
 					Role:            role,
-					Priority:        parsePriority(row[j]), // Convert and map the priority
-					Title:           row[j+1],              // Map the title field
-					Description:     row[j+2],              // Map the description field
-					EscalationLevel: row[j+3],              // Map the escalation level field
-					IncidentLevel:   row[j+4],              // Map the incident level field
+					Priority:        parsePriority(block[0]),   // Convert and map the priority
+					Title:           block[1],                  // Map the title field
+					Description:     block[2],                  // Map the description field
+					EscalationLevel: strings.ToLower(block[3]), // Map the escalation level field
+					IncidentLevel:   strings.ToLower(block[4]), // Map the incident level field
 				}
 
 				// Append the new task to the tasks slice
