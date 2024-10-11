@@ -3,6 +3,9 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"github.com/xuri/excelize/v2"
+	"log"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +20,7 @@ type Task struct {
 	Role            string `json:"role,omitempty"`
 	Category        string `json:"category,omitempty"`
 	EscalationLevel string `json:"escalation_level,omitempty"`
+	IncidentLevel   string `json:"incident_level,omitempty"`
 }
 
 // TaskRepository represents a repository for managing tasks.
@@ -78,7 +82,7 @@ func (t *TaskRepository) GetByCategories(categories []string) ([]Task, error) {
 		args[i] = category
 	}
 
-	query := fmt.Sprintf(`SELECT id, priority, title, description, role, category, escalation_level FROM tasks WHERE category IN (%s) ORDER BY priority`,
+	query := fmt.Sprintf(`SELECT id, priority, title, description, role, category, escalation_level, incident_level FROM tasks WHERE category IN (%s) ORDER BY priority`,
 		strings.Join(placeholders, ","))
 
 	return t.executeAndScanResults(query, args)
@@ -267,7 +271,7 @@ func (t *TaskRepository) executeAndScanResults(query string, args []interface{})
 	defer rows.Close()
 	for rows.Next() {
 		var task Task
-		if err := rows.Scan(&task.ID, &task.Priority, &task.Title, &task.Description, &task.Role, &task.Category, &task.EscalationLevel); err != nil {
+		if err := rows.Scan(&task.ID, &task.Priority, &task.Title, &task.Description, &task.Role, &task.Category, &task.EscalationLevel, &task.IncidentLevel); err != nil {
 			return tasks, err
 		}
 		tasks = append(tasks, task)
@@ -293,13 +297,13 @@ func (t *TaskRepository) BulkAdd(tasks []Task) error {
 		return err
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO tasks (priority, title, description, role, category, escalation_level) VALUES (?, ?, ?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO tasks (priority, title, description, role, category, escalation_level, incident_level) VALUES (?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 
 	for _, task := range tasks {
-		_, err = stmt.Exec(task.Priority, task.Title, task.Description, task.Role, task.Category, task.EscalationLevel)
+		_, err = stmt.Exec(task.Priority, task.Title, task.Description, task.Role, task.Category, task.EscalationLevel, task.IncidentLevel)
 		if err != nil {
 			_ = tx.Rollback()
 			return err
@@ -307,4 +311,145 @@ func (t *TaskRepository) BulkAdd(tasks []Task) error {
 	}
 
 	return tx.Commit()
+}
+
+// parsePriority converts a priority string to an int, returns 0 if invalid.
+// It logs a warning if the conversion fails but does not halt execution.
+func parsePriority(priority string) int {
+	priorityInt, err := strconv.Atoi(priority)
+	if err != nil {
+		log.Printf("failed to parse priority: %v", err)
+		return 0
+	}
+	return priorityInt
+}
+
+// isBlockEmpty checks if a block of 5 columns is empty
+func isBlockEmpty(block []string) bool {
+	for _, cell := range block {
+		if cell != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// ParseXLSXToTasks converts an Excel file into a slice of Task instances, parsing data from each sheet and handling errors.
+func ParseXLSXToTasks(f *excelize.File) ([]Task, error) {
+	var tasks []Task
+
+	// Check if the file has any sheets
+	sheetList := f.GetSheetList()
+	if len(sheetList) == 0 {
+		return nil, fmt.Errorf("the file does not contain any sheets")
+	}
+
+	// Iterate over each sheet in the file
+	for _, sheetName := range sheetList {
+		// Get all the rows from the current sheet
+		rows, err := f.GetRows(sheetName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get rows from sheet %s: %v", sheetName, err)
+		}
+
+		// Fetch the header row roles
+		if len(rows) < 3 {
+			return nil, fmt.Errorf("the sheet %s does not have the required structure (at least 3 rows needed)", sheetName)
+		}
+
+		headerRow := rows[0]
+
+		// Iterate over each row in the sheet, skipping the first 2 rows
+		for i, row := range rows {
+			if i < 2 {
+				continue // Skip the first 2 rows
+			}
+
+			// Ensure the row has at least 5 columns (this check should come before any further processing)
+			if len(row) < 5 {
+				continue // Skip rows that don't have at least 5 columns
+			}
+
+			// Iterate in blocks of 5 columns starting from the first block
+			for j := 0; j+5 <= len(row); j += 5 {
+				// Fetch the role from the header row based on the block's starting column
+				role := ""
+				if j < len(headerRow) {
+					role = headerRow[j]
+				}
+
+				// Ensure there's a full block of 5 columns left to process
+				if j+4 >= len(row) {
+					continue // Skip blocks that don't have 5 columns
+				}
+
+				// Extract the block
+				block := row[j : j+5]
+
+				// Skip if the block is empty
+				if isBlockEmpty(block) {
+					continue
+				}
+
+				// Create a new Task struct with mapped fields
+				task := Task{
+					Category:        sheetName,
+					Role:            role,
+					Priority:        parsePriority(row[j]), // Convert and map the priority
+					Title:           row[j+1],              // Map the title field
+					Description:     row[j+2],              // Map the description field
+					EscalationLevel: row[j+3],              // Map the escalation level field
+					IncidentLevel:   row[j+4],              // Map the incident level field
+				}
+
+				// Append the new task to the tasks slice
+				tasks = append(tasks, task)
+			}
+		}
+	}
+
+	return tasks, nil
+}
+
+// MergeTasks merges two slices of Tasks by updating or removing existing tasks and adding new ones based on their Title and Category.
+// If a task in the update slice has only Title and Category populated, it will remove the corresponding task from the original slice.
+func MergeTasks(original, update []Task) ([]Task, error) {
+	// Helper function to check if a Task in the update slice has only Title and Category populated.
+	isOnlyTitleAndCategoryPopulated := func(task Task) bool {
+		return task.Priority == 0 &&
+			task.Description == "" &&
+			task.Role == "" &&
+			task.EscalationLevel == "" &&
+			task.IncidentLevel == ""
+	}
+
+	// Create a map to store the index of each original task keyed by "Title|Category".
+	// This allows for O(1) lookups to check if a task exists and to find its index quickly.
+	originalTaskMap := make(map[string]int)
+	for i, task := range original {
+		key := task.Title + "|" + task.Category
+		originalTaskMap[key] = i
+	}
+
+	// Iterate over each Task in the update slice
+	for _, updatedTask := range update {
+		// Generate a key using "Title|Category"
+		key := updatedTask.Title + "|" + updatedTask.Category
+		if idx, exists := originalTaskMap[key]; exists {
+			// If the task exists in the original slice
+			if isOnlyTitleAndCategoryPopulated(updatedTask) {
+				// If only Title and Category are populated in the updated Task, delete the task from original
+				original = append(original[:idx], original[idx+1:]...)
+				delete(originalTaskMap, key) // Also remove it from the map
+			} else {
+				// If other fields are populated, update the task in the original slice
+				original[idx] = updatedTask
+			}
+		} else {
+			// If the task does not exist in the original slice, append it to original
+			original = append(original, updatedTask)
+		}
+	}
+
+	return original, nil
 }

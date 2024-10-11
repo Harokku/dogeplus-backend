@@ -78,7 +78,7 @@ func createTables(db *sql.DB) error {
 
 		// Tasks table
 		`CREATE TABLE IF NOT EXISTS tasks (
-			id INTEGER PRIMARY KEY, 
+			id INTEGER PRIMARY KEY AUTOINCREMENT, 
 			priority INTEGER, 
 			title TEXT, 
 			description TEXT, 
