@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/xuri/excelize/v2"
 	"log"
@@ -396,16 +397,6 @@ func isBlockEmpty(block []string) bool {
 	return true
 }
 
-// padRow ensures the row has at least 'minLength' columns by adding empty strings if necessary.
-func padRow(row []string, minLength int) []string {
-	if len(row) >= minLength {
-		return row
-	}
-	paddedRow := make([]string, minLength)
-	copy(paddedRow, row)
-	return paddedRow
-}
-
 // padBlock ensures a block has exactly 'blockSize' columns by appending empty strings if necessary.
 func padBlock(block []string, blockSize int) []string {
 	if len(block) >= blockSize {
@@ -484,6 +475,114 @@ func ParseXLSXToTasks(f *excelize.File) ([]Task, error) {
 	}
 
 	return tasks, nil
+}
+
+var escalationLevels = map[string]int{
+	"allarme":   1,
+	"emergenza": 2,
+	"incidente": 3,
+}
+
+var incidentLevels = map[string]int{
+	"bianca": 1,
+	"verde":  2,
+	"gialla": 3,
+	"rossa":  4,
+}
+
+// FilterTasks filters the provided tasks based on category, escalation level, and incident level.
+//
+// Parameters:
+// - tasks: A slice of Task structs to filter.
+// - category: The category to filter by. Tasks must match this category or be "pro22" (case insensitive).
+// - escalationLevel: The maximum escalation level to allow, incrementally ranked as "allarme", "emergenza", "incidente".
+// - incidentLevel: The maximum incident level to allow when the escalation level is "incidente", incrementally ranked as "bianca", "verde", "gialla", "rossa".
+//
+// Returns:
+// - A slice of Task structs that meet the filter criteria.
+func FilterTasks(tasks []Task, category, escalationLevel, incidentLevel string) []Task {
+	var filteredTasks []Task
+
+	for _, task := range tasks {
+		// Check if the task's category matches the input category or "pro22" (case insensitive).
+		if strings.EqualFold(task.Category, category) || strings.EqualFold(task.Category, "pro22") {
+			// Ensure the task's escalation level is less than or equal to the input escalation level.
+			if escalationLevels[task.EscalationLevel] <= escalationLevels[escalationLevel] {
+				// If the input escalation level is "incidente", filter based on the incident level.
+				if strings.EqualFold(escalationLevel, "incidente") {
+					// Include the task if its incident level is less than or equal to the input incident level.
+					if incidentLevels[task.IncidentLevel] <= incidentLevels[incidentLevel] {
+						filteredTasks = append(filteredTasks, task)
+					}
+				} else {
+					// Include the task if the escalation level criteria is met and it's not "incidente".
+					filteredTasks = append(filteredTasks, task)
+				}
+			}
+		}
+	}
+
+	return filteredTasks
+}
+
+// FilterTasksForEscalation filters tasks based on category, escalation levels, and incident level conditions.
+func FilterTasksForEscalation(tasks []Task, category, startingEscalation, finalEscalation, incidentLevel string) ([]Task, error) {
+	var filteredTasks []Task
+	// The escalation levels ranked in order
+	rankedLevels := GetEscalationLevels()
+	levelMap := make(map[string]int)
+	for i, level := range rankedLevels {
+		levelMap[level] = i
+	}
+	startIdx, startOk := levelMap[strings.ToLower(startingEscalation)]
+	endIdx, endOk := levelMap[strings.ToLower(finalEscalation)]
+	if !startOk || !endOk {
+		return nil, fmt.Errorf("invalid escalation levels: %s or %s", startingEscalation, finalEscalation)
+	}
+	if startIdx == endIdx {
+		return nil, fmt.Errorf("starting and final escalation levels cannot be the same")
+	}
+	// Check if incidentLevel is required and provided
+	if strings.ToLower(finalEscalation) == "incidente" && incidentLevel == "" {
+		return nil, errors.New("incident level must be provided when final escalation is 'incidente'")
+	}
+	// Adjust the indices for correct slicing
+	startIdx++
+	if startIdx >= len(rankedLevels) || startIdx > endIdx {
+		return filteredTasks, nil
+	}
+	// Prepare the escalation levels for filtering
+	escLevels := rankedLevels[startIdx : endIdx+1]
+	escLevelSet := make(map[string]bool, len(escLevels))
+	for _, level := range escLevels {
+		escLevelSet[strings.ToLower(level)] = true
+	}
+	// Handle 'incidente' specific case if incidentLevel is provided
+	incidentLevels := map[string]int{
+		"bianca": 0,
+		"verde":  1,
+		"gialla": 2,
+		"rossa":  3,
+	}
+	var incidentIdx int
+	var incidentOk bool
+	if strings.ToLower(finalEscalation) == "incidente" {
+		incidentIdx, incidentOk = incidentLevels[strings.ToLower(incidentLevel)]
+		if !incidentOk {
+			return nil, fmt.Errorf("invalid incident level: %s", incidentLevel)
+		}
+	}
+	// Filter tasks
+	for _, task := range tasks {
+		if strings.ToLower(task.Category) == strings.ToLower(category) && escLevelSet[strings.ToLower(task.EscalationLevel)] {
+			filteredTasks = append(filteredTasks, task)
+		} else if strings.ToLower(task.EscalationLevel) == "incidente" && strings.ToLower(finalEscalation) == "incidente" {
+			if incidentOk && incidentLevels[strings.ToLower(task.IncidentLevel)] <= incidentIdx {
+				filteredTasks = append(filteredTasks, task)
+			}
+		}
+	}
+	return filteredTasks, nil
 }
 
 // MergeTasks merges two slices of Tasks by updating or removing existing tasks and adding new ones based on their Title and Category.

@@ -203,3 +203,197 @@ func TestParseXLSXToTasks(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterTasksForEscalation(t *testing.T) {
+	tests := []struct {
+		name            string
+		tasks           []Task
+		category        string
+		startingEscal   string
+		finalEscalation string
+		incidentLevel   string
+		want            []Task
+		wantErr         bool
+	}{
+		{
+			name: "ValidFilter",
+			tasks: []Task{
+				{Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{Category: "cat1", EscalationLevel: "incidente", IncidentLevel: ""},
+			},
+			category:        "cat1",
+			startingEscal:   "allarme",
+			finalEscalation: "emergenza",
+			incidentLevel:   "",
+			want: []Task{
+				{Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+			},
+			wantErr: false,
+		},
+		{
+			name: "InvalidStartingAndFinalLevels",
+			tasks: []Task{
+				{Category: "cat1", EscalationLevel: "level1", IncidentLevel: "green"},
+				{Category: "cat1", EscalationLevel: "level2", IncidentLevel: "green"},
+				{Category: "cat1", EscalationLevel: "level3", IncidentLevel: "green"},
+			},
+			category:        "cat1",
+			startingEscal:   "level4",
+			finalEscalation: "level5",
+			incidentLevel:   "",
+			want:            nil,
+			wantErr:         true,
+		},
+		// ... other test cases ...
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := FilterTasksForEscalation(tt.tasks, tt.category, tt.startingEscal, tt.finalEscalation, tt.incidentLevel)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("FilterTasksForEscalation() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("FilterTasksForEscalation() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFilterTasks(t *testing.T) {
+	tests := []struct {
+		name            string
+		tasks           []Task
+		category        string
+		escalationLevel string
+		incidentLevel   string
+		want            []Task
+	}{
+		{
+			name: "All Tasks Matched",
+			tasks: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+			},
+			category:        "cat1",
+			escalationLevel: "allarme",
+			incidentLevel:   "",
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+			},
+		},
+		{
+			name: "Some Tasks Matched",
+			tasks: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat2", EscalationLevel: "emergenza", IncidentLevel: ""},
+			},
+			category:        "cat1",
+			escalationLevel: "allarme",
+			incidentLevel:   "",
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+			},
+		},
+		{
+			name: "Higher escalation level",
+			tasks: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+			},
+			category:        "cat1",
+			escalationLevel: "emergenza",
+			incidentLevel:   "",
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+			},
+		},
+		{
+			name: "Up to incidente, single IncidentLevel",
+			tasks: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title3", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+			},
+			category:        "cat1",
+			escalationLevel: "incidente",
+			incidentLevel:   "bianca",
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title3", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+			},
+		},
+		{
+			name: "Up to incidente, multiple IncidentLevel",
+			tasks: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title3", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 4, Title: "title4", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "verde"},
+			},
+			category:        "cat1",
+			escalationLevel: "incidente",
+			incidentLevel:   "verde",
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title3", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 4, Title: "title4", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "verde"},
+			},
+		},
+		{
+			name: "Up to incidente, multiple IncidentLevel, some IncidentLevel not matched",
+			tasks: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title3", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 4, Title: "title4", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "verde"},
+				{ID: 5, Title: "title5", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "gialla"},
+			},
+			category:        "cat1",
+			escalationLevel: "incidente",
+			incidentLevel:   "verde",
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title3", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 4, Title: "title4", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "verde"},
+			},
+		},
+		{
+			name: "Up to incidente, multiple IncidentLevel, some IncidentLevel not matched, some Category not matched",
+			tasks: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title3", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 4, Title: "title4", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "verde"},
+				{ID: 6, Title: "title6", Category: "cat2", EscalationLevel: "incidente", IncidentLevel: "verde"},
+				{ID: 5, Title: "title5", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "gialla"},
+			},
+			category:        "cat1",
+			escalationLevel: "incidente",
+			incidentLevel:   "verde",
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "cat1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "cat1", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title3", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 4, Title: "title4", Category: "cat1", EscalationLevel: "incidente", IncidentLevel: "verde"},
+			},
+		},
+		// ... other test cases ...
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FilterTasks(tt.tasks, tt.category, tt.escalationLevel, tt.incidentLevel)
+			if reflect.DeepEqual(got, tt.want) == false {
+				t.Errorf("FilterTasks() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
