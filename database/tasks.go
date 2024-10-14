@@ -106,26 +106,22 @@ func (t *TaskRepository) GetCategories() ([]string, error) {
 	return categories, nil
 }
 
-// GetByCategories retrieves tasks based on the provided categories.
-// It takes an array of category strings as input and returns an array of Task objects and an error.
-// For each category, a placeholder is created and an argument is assigned.
-// A query is constructed using the placeholders and executed against the database connection.
-// The retrieved rows are scanned and transformed into Task objects,
-// which are then appended to the tasks array.
-// If any error occurs during the process, it is returned along with the tasks array.
-// Finally, the tasks array and the error are returned.
-func (t *TaskRepository) GetByCategories(categories []string) ([]Task, error) {
-	placeholders := make([]string, len(categories))
-	args := make([]interface{}, len(categories))
+// GetByCategories retrieves tasks based on the provided category.
+// It constructs a query to fetch tasks from the "tasks" table where the category matches the provided input.
+// The query is executed, and the resulting rows are scanned into a slice of Task objects.
+// Returns a slice of Task objects and an error, if any occur during query execution.
+func (t *TaskRepository) GetByCategories(category string) ([]Task, error) {
+	// Prepare the placeholder and arguments for the query
+	placeholders := "?, ?"
+	args := []interface{}{category, "PRO22"}
 
-	for i, category := range categories {
-		placeholders[i] = "?"
-		args[i] = category
-	}
+	// Construct the query using the placeholders
+	query := fmt.Sprintf(`SELECT id, priority, title, description, role, category, escalation_level, incident_level 
+	                      FROM tasks 
+	                      WHERE category IN (%s) 
+	                      ORDER BY priority`, placeholders)
 
-	query := fmt.Sprintf(`SELECT id, priority, title, description, role, category, escalation_level, incident_level FROM tasks WHERE category IN (%s) ORDER BY priority`,
-		strings.Join(placeholders, ","))
-
+	// Execute the query and scan the results
 	return t.executeAndScanResults(query, args)
 }
 

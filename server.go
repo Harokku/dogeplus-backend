@@ -30,7 +30,7 @@ func main() {
 	app := router.NewFiberApp()
 
 	// Setup routes
-	router.SetupRoutes(app, repos, connectionManager)
+	router.SetupRoutes(app, config, repos, connectionManager)
 
 	// Start server listener loop
 	app.Listen(":" + serverConfig.GetEnvWithFallback(config, serverConfig.Port))

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"dogeplus-backend/broadcast"
+	"dogeplus-backend/config"
 	"dogeplus-backend/database"
 	"encoding/json"
 	"github.com/gofiber/fiber/v2"
@@ -11,10 +12,11 @@ import (
 )
 
 type eventRequest struct {
-	Categories      []string `json:"categories"`
-	EventNumber     int      `json:"event_number"`
-	CentralId       string   `json:"central_id"`
-	EscalationLevel string   `json:"escalation_level"`
+	Categories      string `json:"categories"`
+	EventNumber     int    `json:"event_number"`
+	CentralId       string `json:"central_id"`
+	EscalationLevel string `json:"escalation_level"`
+	IncidentLevel   string `json:"incident_level"`
 }
 
 type updateEventRequest struct {
@@ -35,7 +37,7 @@ type updateEventRequest struct {
 // If the request is successful, it returns a JSON response with the "Result" field set to "Events Created".
 // repos is a pointer to a database.Repositories struct that contains the repositories for managing tasks and active events.
 // ctx is a pointer to a fiber.Ctx object representing the HTTP request context.
-func CreateNewEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
+func CreateNewEvent(repos *database.Repositories, confg config.Config) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		var body eventRequest
 		err := ctx.BodyParser(&body)
@@ -45,9 +47,9 @@ func CreateNewEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 		}
 
-		if len(body.Categories) == 0 {
-			return fiber.NewError(fiber.StatusBadRequest, "Invalid request body: Categories field should not be empty")
-		}
+		//if len(body.Categories) == 0 {
+		//	return fiber.NewError(fiber.StatusBadRequest, "Invalid request body: Categories field should not be empty")
+		//}
 
 		// Get tasks from body list
 		taskList, err := repos.Tasks.GetByCategories(body.Categories)
@@ -57,22 +59,35 @@ func CreateNewEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to retrieve tasks")
 		}
 
-		// Filter tasks based on escalation level
-		var filteredTasks []database.Task
-		escalationPriority := map[string]int{
-			"allarme":   1,
-			"emergenza": 2,
-			"incidente": 3,
-		}
+		// Get local tasks based on CentralId from body
+		var tasksToUse []database.Task
+		// Load the correct local task file
+		f, err := config.LoadExcelFile(confg, body.CentralId)
+		if err == nil {
 
-		for _, task := range taskList {
-			if escalationPriority[task.EscalationLevel] <= escalationPriority[body.EscalationLevel] {
-				filteredTasks = append(filteredTasks, task)
+			// Parse the file
+			localTasks, err := database.ParseXLSXToTasks(f)
+			if err != nil {
+				log.Errorf("Error parsing local task file: %s\n", err)
+				return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse local task file")
 			}
+
+			// Filter the local file based on request body parameters
+			filteredLocalTasks := database.FilterTasks(localTasks, body.Categories, body.EscalationLevel, body.IncidentLevel)
+
+			// Merge task lists
+			tasksToUse, err = database.MergeTasks(taskList, filteredLocalTasks)
+			if err != nil {
+				// Error while merging tasks
+				log.Errorf("Error merging tasks: %s\n", err)
+				return fiber.NewError(fiber.StatusInternalServerError, "Failed to merge tasks")
+			}
+		} else {
+			tasksToUse = taskList
 		}
 
 		// Create new event from taskList
-		err = repos.ActiveEvents.CreateFromTaskList(filteredTasks, body.EventNumber, body.CentralId)
+		err = repos.ActiveEvents.CreateFromTaskList(tasksToUse, body.EventNumber, body.CentralId)
 		if err != nil {
 			// Error while creating new event
 			log.Errorf("Error creating event: %s\n", err)

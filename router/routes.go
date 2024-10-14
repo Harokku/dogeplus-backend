@@ -2,6 +2,7 @@ package router
 
 import (
 	"dogeplus-backend/broadcast"
+	"dogeplus-backend/config"
 	"dogeplus-backend/database"
 	"dogeplus-backend/handlers"
 	"github.com/gofiber/fiber/v2"
@@ -10,9 +11,10 @@ import (
 // SetupRoutes sets up the routes for the application.
 // It takes in the following parameters:
 // - app: a pointer to a fiber.App instance representing the application
+// - config: a config.Config struct with env variables
 // - repos: a pointer to a database.Repositories instance representing the collection of repositories
 // - cm: a pointer to a broadcast.ConnectionManager instance representing the connection manager
-func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.ConnectionManager) {
+func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositories, cm *broadcast.ConnectionManager) {
 	app.Get("/", handlers.HomeHandler)
 
 	// api group
@@ -33,7 +35,7 @@ func SetupRoutes(app *fiber.App, repos *database.Repositories, cm *broadcast.Con
 
 	// ActiveEvents routes
 	activeEvents := v1.Group("/active-events")
-	activeEvents.Post("/", handlers.CreateNewEvent(repos))
+	activeEvents.Post("/", handlers.CreateNewEvent(repos, config))
 	activeEvents.Post("/overview", handlers.PostNewOverview(repos))
 	activeEvents.Put("/", handlers.UpdateEventTask(repos, cm))
 	activeEvents.Get("/:central_id", handlers.GetSingleEvent(repos))

@@ -21,14 +21,16 @@ type EnvVars string
 
 // Port is a constant representing the environment variable name .
 const (
-	Port   = "PORT"
-	DbFile = "DBFILE"
+	Port     = "PORT"
+	DbFile   = "DBFILE"
+	TaskRoot = "TASKROOT"
 )
 
 // EnvVarsSlice is a slice of the EnvVars type, representing a collection of environment variables.
 var EnvVarsSlice = []EnvVars{
 	Port,
 	DbFile,
+	TaskRoot,
 }
 
 // checkAllEnvVars checks if all environment variables specified in EnvVarsSlice are set.
@@ -94,21 +96,29 @@ func GetEnvWithFallback(config Config, key EnvVars) string {
 // The error message contains the path that failed the check.
 // This function relies on the filepath.IsAbs and os.Stat functions.
 func SanitizeFilePath(path string) error {
-	// check if path is absolute and don't traverse root
-	if !filepath.IsAbs(path) || strings.Contains(path, "..") {
-		return fmt.Errorf(`"%s" is not an absolute path`, path)
+	// Clean the path to normalize it
+	cleanPath := filepath.Clean(path)
+
+	// check if path is absolute to prevent path traversal and ensure it doesn't traverse root
+	if !filepath.IsAbs(cleanPath) || strings.Contains(cleanPath, ".."+string(filepath.Separator)) {
+		return fmt.Errorf(`"%s" is not an absolute path or contains traversal`, path)
 	}
 
-	// check if file exist
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	// Detect and reject any null bytes in the file path
+	if strings.ContainsRune(cleanPath, '\x00') {
+		return fmt.Errorf(`"%s" contains null byte`, path)
+	}
+
+	// check if file exists
+	if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
 		return fmt.Errorf(`"%s" does not exist`, path)
 	}
 
-	// check if program have sufficient permission ti access the file
-	file, err := os.Open(path)
+	// Check if the program has sufficient permission to access the file
+	file, err := os.Open(cleanPath)
 	defer file.Close()
 	if err != nil {
-		return fmt.Errorf(`"%s" cannot open file: %s`, path, err)
+		return fmt.Errorf(`"%s" cannot be opened: %v`, path, err)
 	}
 
 	return nil
