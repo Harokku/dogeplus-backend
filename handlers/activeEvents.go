@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
+	"slices"
 	"strconv"
 )
 
@@ -59,8 +60,12 @@ func CreateNewEvent(repos *database.Repositories, confg config.Config) func(ctx 
 			return fiber.NewError(fiber.StatusInternalServerError, "Failed to retrieve tasks")
 		}
 
+		// Filter tasks based on selection
+		filteredTasks := database.FilterTasks(taskList, body.Categories, body.EscalationLevel, body.IncidentLevel)
+
 		// Get local tasks based on CentralId from body
 		var tasksToUse []database.Task
+		isMergedTasks := false
 		// Load the correct local task file
 		f, err := config.LoadExcelFile(confg, body.CentralId)
 		if err == nil {
@@ -76,14 +81,30 @@ func CreateNewEvent(repos *database.Repositories, confg config.Config) func(ctx 
 			filteredLocalTasks := database.FilterTasks(localTasks, body.Categories, body.EscalationLevel, body.IncidentLevel)
 
 			// Merge task lists
-			tasksToUse, err = database.MergeTasks(taskList, filteredLocalTasks)
+			tasksToUse, err = database.MergeTasks(filteredTasks, filteredLocalTasks)
 			if err != nil {
 				// Error while merging tasks
 				log.Errorf("Error merging tasks: %s\n", err)
 				return fiber.NewError(fiber.StatusInternalServerError, "Failed to merge tasks")
 			}
+
+			// Set isMergedTasks to true to signal that the data need to be sorted
+			isMergedTasks = true
 		} else {
-			tasksToUse = taskList
+			tasksToUse = filteredTasks
+		}
+
+		// Sort merged tasks by priority if merging occurred
+		if isMergedTasks {
+			slices.SortStableFunc(tasksToUse, func(a, b database.Task) int {
+				if a.Priority < b.Priority {
+					return -1
+				}
+				if a.Priority > b.Priority {
+					return 1
+				}
+				return 0
+			})
 		}
 
 		// Create new event from taskList
