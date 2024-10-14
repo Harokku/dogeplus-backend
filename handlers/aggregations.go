@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"dogeplus-backend/config"
 	"dogeplus-backend/database"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/log"
+	"slices"
 )
 
 type taskCompletionInfo struct {
@@ -115,7 +118,7 @@ func GetAllEscalationLevels(c *fiber.Ctx) error {
 // PostEscalate handles HTTP POST requests to escalate an event's level.
 // It reads the request body to get the eventNumber and newLevel, escalates the event level,
 // and updates the overview. It returns a JSON response indicating success or any error.
-func PostEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
+func PostEscalate(repos *database.Repositories, confg config.Config) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		// Parse request body
 		var request EscalateRequest
@@ -164,8 +167,57 @@ func PostEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
 			})
 		}
 
+		// Get local Tasks based on selection
+		var tasksToUse []database.Task
+		isMergedTasks := false
+		// Load the correct local task file
+		f, err := config.LoadExcelFile(confg, actualOverview.CentralId)
+		if err == nil {
+
+			// Parse the file
+			localTasks, err := database.ParseXLSXToTasks(f)
+			if err != nil {
+				log.Errorf("Error parsing local task file: %s\n", err)
+				return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse local task file")
+			}
+
+			// Filter the local file based on request body parameters
+			filteredLocalTasks, err := database.FilterTasksForEscalation(localTasks, actualOverview.Type, string(oldLevel), string(request.NewLevel), request.IncidentLevel)
+			if err != nil {
+				log.Errorf("Error filtering local tasks for escalation: %s\n", err)
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "Failed to filter local tasks for escalation",
+				})
+			}
+
+			// Merge task lists
+			tasksToUse, err = database.MergeTasks(filteredLocalTasks, newTasks)
+			if err != nil {
+				// Error while merging tasks
+				log.Errorf("Error merging tasks: %s\n", err)
+				return fiber.NewError(fiber.StatusInternalServerError, "Failed to merge tasks")
+			}
+			// Set isMergedTasks to true to signal that the data need to be sorted
+			isMergedTasks = true
+		} else {
+			tasksToUse = newTasks
+		}
+
+		// Sort merged tasks by priority if merging occurred
+		if isMergedTasks {
+			slices.SortStableFunc(tasksToUse, func(a, b database.Task) int {
+				if a.Priority < b.Priority {
+					return -1
+				}
+				if a.Priority > b.Priority {
+					return 1
+				}
+				return 0
+			})
+		}
+
 		// Add new tasks to active events
-		err = repos.ActiveEvents.CreateFromTaskList(newTasks, actualOverview.EventNumber, actualOverview.CentralId)
+		err = repos.ActiveEvents.CreateFromTaskList(tasksToUse, actualOverview.EventNumber, actualOverview.CentralId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
@@ -174,7 +226,7 @@ func PostEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
 
 		// Keep in memory completion metrics cache in sync
 		taskCompletionInstance := database.GetTaskCompletionMapInstance(nil)
-		taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(newTasks))
+		taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(tasksToUse))
 
 		// build a map for realtime update
 		//updatedEscalation := fiber.Map{

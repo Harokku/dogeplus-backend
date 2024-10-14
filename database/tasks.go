@@ -247,7 +247,7 @@ func (t *TaskRepository) GetGyCategoryAndEscalationLevel(category, startingEscal
 	query := `
         SELECT id, priority, title, description, role, category, escalation_level, incident_level 
         FROM tasks 
-        WHERE (LOWER(category) = ? OR LOWER(category) = LOWER(?))
+  		WHERE (LOWER(category) = ? OR LOWER(category) = LOWER(?) OR LOWER(category) = 'pro22')
         AND (LOWER(escalation_level) IN (?)`
 
 	// Prepare the escalation levels for the query

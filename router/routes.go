@@ -52,7 +52,7 @@ func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositor
 	aggregationEscalation.Get("/", handlers.GetAllEscalationLevels)
 	aggregationEscalation.Get("/details", handlers.GetAllEscalationDetails(repos))
 	aggregationEscalation.Get("/details/:central_id", handlers.GetEscalationDetailsByCentralId(repos))
-	aggregationEscalation.Post("/escalate", handlers.PostEscalate(repos))
+	aggregationEscalation.Post("/escalate", handlers.PostEscalate(repos, config))
 	aggregationEscalation.Post("/deescalate", handlers.PostDeEscalate(repos))
 
 	// Ws Routes
