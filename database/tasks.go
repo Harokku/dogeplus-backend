@@ -214,6 +214,82 @@ func (t *TaskRepository) GetByCategoriesAndEscalationLevels(categories []string,
 // finalEscalation: the target escalation level.
 // incidentLevel: the level of incident to filter if the final escalation is 'incidente'.
 // Returns a slice of Task and an error if any occur during query execution.
+//func (t *TaskRepository) GetGyCategoryAndEscalationLevel(category, startingEscalation, finalEscalation, incidentLevel string) ([]Task, error) {
+//	var tasks []Task
+//
+//	// The escalation levels ranked in order
+//	rankedLevels := GetEscalationLevels()
+//	levelMap := make(map[string]int)
+//	for i, level := range rankedLevels {
+//		levelMap[level] = i
+//	}
+//	startIdx, startOk := levelMap[strings.ToLower(startingEscalation)]
+//	endIdx, endOk := levelMap[strings.ToLower(finalEscalation)]
+//	if !startOk || !endOk {
+//		return nil, fmt.Errorf("invalid escalation levels: %s or %s", startingEscalation, finalEscalation)
+//	}
+//	if startIdx == endIdx {
+//		return nil, fmt.Errorf("starting and final escalation levels cannot be the same")
+//	}
+//
+//	// Check if incidentLevel is required and provided
+//	if strings.ToLower(finalEscalation) == "incidente" && incidentLevel == "" {
+//		return nil, fmt.Errorf("incident level must be provided when final escalation is 'incidente'")
+//	}
+//
+//	// Adjust the indices for correct slicing
+//	startIdx++
+//	if startIdx >= len(rankedLevels) || startIdx > endIdx {
+//		return tasks, nil
+//	}
+//
+//	// Construct the base query
+//	query := `
+//        SELECT id, priority, title, description, role, category, escalation_level, incident_level
+//        FROM tasks
+//  		WHERE (LOWER(category) = ? OR LOWER(category) = LOWER(?) OR LOWER(category) = 'pro22')
+//        AND (LOWER(escalation_level) IN (?)`
+//
+//	// Prepare the escalation levels for the query
+//	escLevels := rankedLevels[startIdx : endIdx+1]
+//	escPlaceholders := make([]string, len(escLevels))
+//	args := make([]interface{}, len(escLevels)+2)
+//	for i, level := range escLevels {
+//		escPlaceholders[i] = "?"
+//		args[i+2] = level
+//	}
+//
+//	// Handle 'incidente' specific case if incidentLevel is provided
+//	if strings.ToLower(finalEscalation) == "incidente" {
+//		incidentLevels := map[string]int{
+//			"bianca": 0,
+//			"verde":  1,
+//			"gialla": 2,
+//			"rossa":  3,
+//		}
+//		incidentIdx, incidentOk := incidentLevels[strings.ToLower(incidentLevel)]
+//		if !incidentOk {
+//			return nil, fmt.Errorf("invalid incident level: %s", incidentLevel)
+//		}
+//		incidentLevelPlaceholders := []string{}
+//		for level, idx := range incidentLevels {
+//			if idx <= incidentIdx {
+//				incidentLevelPlaceholders = append(incidentLevelPlaceholders, "?")
+//				args = append(args, level)
+//			}
+//		}
+//		query += ` OR (LOWER(escalation_level) = 'incidente' AND LOWER(incident_level) IN (` + strings.Join(incidentLevelPlaceholders, ",") + `))`
+//	}
+//
+//	query += `);`
+//
+//	args[0] = category
+//	args[1] = category
+//	query = fmt.Sprintf(strings.Replace(query, "IN (?)", "IN ("+strings.Join(escPlaceholders, ",")+")", 1))
+//
+//	return t.executeAndScanResults(query, args)
+//}
+
 func (t *TaskRepository) GetGyCategoryAndEscalationLevel(category, startingEscalation, finalEscalation, incidentLevel string) ([]Task, error) {
 	var tasks []Task
 
@@ -243,21 +319,25 @@ func (t *TaskRepository) GetGyCategoryAndEscalationLevel(category, startingEscal
 		return tasks, nil
 	}
 
-	// Construct the base query
+	// Construct the base query with category filtering
 	query := `
         SELECT id, priority, title, description, role, category, escalation_level, incident_level 
         FROM tasks 
-  		WHERE (LOWER(category) = ? OR LOWER(category) = LOWER(?) OR LOWER(category) = 'pro22')
-        AND (LOWER(escalation_level) IN (?)`
+  		WHERE (LOWER(category) = LOWER(?) OR LOWER(category) = 'pro22')`
+
+	args := make([]interface{}, 0)
+	args = append(args, category)
 
 	// Prepare the escalation levels for the query
 	escLevels := rankedLevels[startIdx : endIdx+1]
 	escPlaceholders := make([]string, len(escLevels))
-	args := make([]interface{}, len(escLevels)+2)
 	for i, level := range escLevels {
 		escPlaceholders[i] = "?"
-		args[i+2] = level
+		args = append(args, level)
 	}
+
+	// Append the escalation level placeholders into the query
+	query += ` AND (LOWER(escalation_level) IN (` + strings.Join(escPlaceholders, ", ") + `)`
 
 	// Handle 'incidente' specific case if incidentLevel is provided
 	if strings.ToLower(finalEscalation) == "incidente" {
@@ -271,6 +351,7 @@ func (t *TaskRepository) GetGyCategoryAndEscalationLevel(category, startingEscal
 		if !incidentOk {
 			return nil, fmt.Errorf("invalid incident level: %s", incidentLevel)
 		}
+
 		incidentLevelPlaceholders := []string{}
 		for level, idx := range incidentLevels {
 			if idx <= incidentIdx {
@@ -278,14 +359,13 @@ func (t *TaskRepository) GetGyCategoryAndEscalationLevel(category, startingEscal
 				args = append(args, level)
 			}
 		}
-		query += ` OR (LOWER(escalation_level) = 'incidente' AND LOWER(incident_level) IN (` + strings.Join(incidentLevelPlaceholders, ",") + `))`
+
+		// Enclose the entire condition for incidents within parentheses
+		query += ` OR (LOWER(escalation_level) = 'incidente' AND LOWER(incident_level) IN (` + strings.Join(incidentLevelPlaceholders, ", ") + `)))`
+	} else {
+		// End the escalation level condition, if no incident level is provided or escalation level is not incidente
+		query += `)`
 	}
-
-	query += `);`
-
-	args[0] = category
-	args[1] = category
-	query = fmt.Sprintf(strings.Replace(query, "IN (?)", "IN ("+strings.Join(escPlaceholders, ",")+")", 1))
 
 	return t.executeAndScanResults(query, args)
 }
@@ -570,14 +650,22 @@ func FilterTasksForEscalation(tasks []Task, category, startingEscalation, finalE
 	}
 	// Filter tasks
 	for _, task := range tasks {
-		if strings.ToLower(task.Category) == strings.ToLower(category) && escLevelSet[strings.ToLower(task.EscalationLevel)] {
-			filteredTasks = append(filteredTasks, task)
-		} else if strings.ToLower(task.EscalationLevel) == "incidente" && strings.ToLower(finalEscalation) == "incidente" {
-			if incidentOk && incidentLevels[strings.ToLower(task.IncidentLevel)] <= incidentIdx {
+		taskEscLevel := strings.ToLower(task.EscalationLevel)
+		taskIncidentLevel := strings.ToLower(task.IncidentLevel)
+		taskCategory := strings.ToLower(task.Category)
+
+		if taskCategory == strings.ToLower(category) || taskCategory == strings.ToLower("pro22") {
+			if strings.ToLower(finalEscalation) == "incidente" && taskEscLevel == "incidente" {
+				taskIncidentLevelIdx, ok := incidentLevels[taskIncidentLevel]
+				if ok && taskIncidentLevelIdx <= incidentIdx {
+					filteredTasks = append(filteredTasks, task)
+				}
+			} else if escLevelSet[taskEscLevel] {
 				filteredTasks = append(filteredTasks, task)
 			}
 		}
 	}
+
 	return filteredTasks, nil
 }
 

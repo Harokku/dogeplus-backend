@@ -159,13 +159,16 @@ func PostEscalate(repos *database.Repositories, confg config.Config) func(c *fib
 			})
 		}
 
+		// FIXME: Implement correct filtering using db query
 		// Get new level tasks
-		newTasks, err := repos.Tasks.GetGyCategoryAndEscalationLevel(actualOverview.Type, string(oldLevel), string(request.NewLevel), request.IncidentLevel)
+		// newTasks, err := repos.Tasks.GetGyCategoryAndEscalationLevel(actualOverview.Type, string(oldLevel), string(request.NewLevel), request.IncidentLevel)
+		newTasks, err := repos.Tasks.GetByCategories(actualOverview.Type)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+		newFilteredTasks, err := database.FilterTasksForEscalation(newTasks, actualOverview.Type, string(oldLevel), string(request.NewLevel), request.IncidentLevel)
 
 		// Get local Tasks based on selection
 		var tasksToUse []database.Task
@@ -191,7 +194,7 @@ func PostEscalate(repos *database.Repositories, confg config.Config) func(c *fib
 			}
 
 			// Merge task lists
-			tasksToUse, err = database.MergeTasks(filteredLocalTasks, newTasks)
+			tasksToUse, err = database.MergeTasks(filteredLocalTasks, newFilteredTasks)
 			if err != nil {
 				// Error while merging tasks
 				log.Errorf("Error merging tasks: %s\n", err)
