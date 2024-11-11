@@ -110,4 +110,4 @@ config.toml
 /requests/
 
 # DB folder
-/db/
+#/db/
