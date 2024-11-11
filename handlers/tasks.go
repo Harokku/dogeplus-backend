@@ -78,6 +78,32 @@ func UploadMainTasksFile(repos *database.Repositories) func(ctx *fiber.Ctx) erro
 	}
 }
 
+// UploadLocalTasksFile handles the upload of a local tasks file via multipart form and saves it to a specified directory.
+func UploadLocalTasksFile() func(ctx *fiber.Ctx) error {
+	return func(ctx *fiber.Ctx) error {
+		// Retrieve file from the multipart form
+		file, err := ctx.FormFile("file")
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).SendString("Failed to retrieve file")
+		}
+
+		// Get the filename and the extension
+		filename := file.Filename
+
+		// FIXME: Implement robust path handling reading from .env
+		// Define the path to save the file
+		savePath := filepath.Join("/Users/simonecrenna/GolandProjects/dogeplus-backend/db/", filename) // Saves the file in the current directory
+
+		// Save the file to the defined path
+		if err := ctx.SaveFile(file, savePath); err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).SendString("Failed to save file")
+		}
+
+		// Return success response
+		return ctx.SendString(fmt.Sprintf("File %s uploaded successfully", filename))
+	}
+}
+
 // GetTasks returns a handler function that retrieves distinct categories from the database
 // and sends them as a response in JSON format.
 // The handler function takes a *fiber.Ctx as input and returns an error.

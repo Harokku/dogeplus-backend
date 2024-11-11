@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2/log"
 	_ "github.com/mattn/go-sqlite3"
 	"sync"
+	"time"
 )
 
 // Singleton instance
@@ -14,44 +15,58 @@ var (
 	once     sync.Once
 )
 
+// retry function tries to execute the provided function fn up to maxRetries times, waiting delay between attempts.
+func retry(maxRetries int, delay time.Duration, fn func() error) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		if err = fn(); err == nil {
+			return nil
+		}
+		time.Sleep(delay)
+	}
+	return err
+}
+
 // GetInstance returns a singleton instance of *sql.DB and an error.
 // If the instance has already been created, it returns the existing one.
 // If the instance hasn't been created yet, it creates a new one using the specified database driver and connection string.
 func GetInstance(configFile config.Config) (*sql.DB, error) {
-	var err error
+	var initErr error
 	db := config.GetEnvWithFallback(configFile, config.DbFile)
 
 	once.Do(func() {
 		// Check if db file is sanitized
-		err = config.SanitizeFilePath(db)
-		if err != nil {
+		if err := config.SanitizeFilePath(db); err != nil {
+			initErr = err
 			return
 		}
 
-		// Create and instance to db
-		instance, err = sql.Open("sqlite3", db)
-		if err != nil {
-			return
-		}
+		// Retry logic for db connection
+		initErr = retry(5, 10*time.Second, func() error {
+			var err error
+			instance, err = sql.Open("sqlite3", db)
+			if err != nil {
+				return err
+			}
 
-		// Ping db to check connection
-		err = instance.Ping()
-		if err != nil {
-			return
-		}
+			// Ping db to check connection
+			if err = instance.Ping(); err != nil {
+				return err
+			}
 
-		log.Info("Db connection established")
+			log.Info("Db connection established")
 
-		// Create table structure if not already exist
-		err = createTables(instance)
-		if err != nil {
-			return
-		}
+			// Create table structure if not already exist
+			if err = createTables(instance); err != nil {
+				return err
+			}
 
-		log.Info("Db table structure created")
+			log.Info("Db table structure created")
+			return nil
+		})
 	})
 
-	return instance, err
+	return instance, initErr
 }
 
 // createTables creates the necessary tables in the provided *sql.DB instance.

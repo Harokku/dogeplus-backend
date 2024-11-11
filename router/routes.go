@@ -32,6 +32,7 @@ func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositor
 	tasks.Get("/", handlers.GetTasks(repos))
 	tasks.Post("/", handlers.GetTasksForEscalation(repos))
 	tasks.Post("/upload/main", handlers.UploadMainTasksFile(repos))
+	tasks.Post("/upload/local", handlers.UploadLocalTasksFile())
 
 	// ActiveEvents routes
 	activeEvents := v1.Group("/active-events")
