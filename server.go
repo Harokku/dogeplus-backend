@@ -6,6 +6,7 @@ import (
 	"dogeplus-backend/database"
 	"dogeplus-backend/router"
 	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
 func main() {
@@ -28,6 +29,9 @@ func main() {
 
 	// Init Fiber app
 	app := router.NewFiberApp()
+
+	// Enable CORS middleware with default settings
+	app.Use(cors.New())
 
 	// Setup routes
 	router.SetupRoutes(app, config, repos, connectionManager)
