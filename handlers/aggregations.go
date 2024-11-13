@@ -203,7 +203,7 @@ func PostEscalate(repos *database.Repositories, confg config.Config) func(c *fib
 			// Set isMergedTasks to true to signal that the data need to be sorted
 			isMergedTasks = true
 		} else {
-			tasksToUse = newTasks
+			tasksToUse = newFilteredTasks
 		}
 
 		// Sort merged tasks by priority if merging occurred
