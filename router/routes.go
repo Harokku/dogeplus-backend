@@ -29,7 +29,7 @@ func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositor
 
 	// Tasks routes
 	tasks := v1.Group("/tasks")
-	tasks.Get("/", handlers.GetTasks(repos))
+	tasks.Get("/", handlers.GetTasks(config, repos))
 	tasks.Post("/", handlers.GetTasksForEscalation(repos))
 	tasks.Post("/upload/main", handlers.UploadMainTasksFile(repos))
 	tasks.Post("/upload/local", handlers.UploadLocalTasksFile(config))

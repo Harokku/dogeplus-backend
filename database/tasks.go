@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"dogeplus-backend/config"
 	"errors"
 	"fmt"
 	"github.com/xuri/excelize/v2"
@@ -81,7 +82,7 @@ func (t *TaskRepository) WithTransaction(fn func(*TaskRepositoryTransaction) err
 // The retrieved rows are scanned and each category is appended to the categories array.
 // If any error occurs during the process, it is returned along with the categories array.
 // Finally, the categories array and the error are returned.
-func (t *TaskRepository) GetCategories() ([]string, error) {
+func (t *TaskRepository) GetCategories(configFile config.Config) ([]string, error) {
 	var categories []string
 
 	rows, err := t.db.Query("SELECT DISTINCT category FROM tasks")
@@ -102,6 +103,8 @@ func (t *TaskRepository) GetCategories() ([]string, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
+	//TODO: implement local task merge
 
 	return categories, nil
 }
@@ -540,6 +543,50 @@ func FilterTasksForEscalation(tasks []Task, category, startingEscalation, finalE
 // MergeTasks merges two slices of Tasks by updating or removing existing tasks and adding new ones based on their Title and Category.
 // If a task in the update slice has only Title and Category populated, it will remove the corresponding task from the original slice.
 func MergeTasks(original, update []Task) ([]Task, error) {
+	// Helper function to check if a Task in the update slice has only Title populated.
+	isOnlyTitleAndCategoryPopulated := func(task Task) bool {
+		return task.Priority == 0 &&
+			task.Description == "" &&
+			task.Category == "" &&
+			task.Role == "" &&
+			task.EscalationLevel == "" &&
+			task.IncidentLevel == ""
+	}
+
+	// Create a map to store the index of each original task keyed by "Title|Category".
+	// This allows for O(1) lookups to check if a task exists and to find its index quickly.
+	originalTaskMap := make(map[string]int)
+	for i, task := range original {
+		key := task.Title
+		originalTaskMap[key] = i
+	}
+
+	// Iterate over each Task in the update slice
+	for _, updatedTask := range update {
+		// Generate a key using "Title|Category"
+		key := updatedTask.Title
+		if idx, exists := originalTaskMap[key]; exists {
+			// If the task exists in the original slice
+			if isOnlyTitleAndCategoryPopulated(updatedTask) {
+				// If only Title and Category are populated in the updated Task, delete the task from original
+				original = append(original[:idx], original[idx+1:]...)
+				delete(originalTaskMap, key) // Also remove it from the map
+			} else {
+				// If other fields are populated, update the task in the original slice
+				original[idx] = updatedTask
+			}
+		} else {
+			// If the task does not exist in the original slice, append it to original
+			original = append(original, updatedTask)
+		}
+	}
+
+	return original, nil
+}
+
+// MergeTasksFixCategory merges two slices of Tasks by updating or removing existing tasks and adding new ones based on their Title and Category.
+// If a task in the update slice has only Title and Category populated, it will remove the corresponding task from the original slice.
+func MergeTasksFixCategory(original, update []Task) ([]Task, error) {
 	// Helper function to check if a Task in the update slice has only Title and Category populated.
 	isOnlyTitleAndCategoryPopulated := func(task Task) bool {
 		return task.Priority == 0 &&

@@ -115,10 +115,10 @@ func UploadLocalTasksFile(configFile config.Config) func(ctx *fiber.Ctx) error {
 // Otherwise, a success response is sent with the status code 200
 // and a JSON object with the retrieved categories, the length of the categories list,
 // and a result message.
-func GetTasks(repos *database.Repositories) func(ctx *fiber.Ctx) error {
+func GetTasks(configFile config.Config, repos *database.Repositories) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		// Get distinct categories slice from db
-		categoriesList, err := repos.Tasks.GetCategories()
+		categoriesList, err := repos.Tasks.GetCategories(configFile)
 		if err != nil {
 			return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":  "Failed to get categories",

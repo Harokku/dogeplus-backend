@@ -70,7 +70,7 @@ func TestMergeTasks(t *testing.T) {
 				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "el2", IncidentLevel: "il2"},
 			},
 			update: []Task{
-				{ID: 2, Title: "title2", Category: "category2", Priority: 0, Description: "", Role: "", EscalationLevel: "", IncidentLevel: ""},
+				{ID: 2, Title: "title2", Category: "", Priority: 0, Description: "", Role: "", EscalationLevel: "", IncidentLevel: ""},
 			},
 			want: []Task{
 				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
