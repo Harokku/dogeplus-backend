@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"dogeplus-backend/config"
 	"dogeplus-backend/database"
 	"fmt"
 	"github.com/gofiber/fiber/v2"
@@ -79,7 +80,7 @@ func UploadMainTasksFile(repos *database.Repositories) func(ctx *fiber.Ctx) erro
 }
 
 // UploadLocalTasksFile handles the upload of a local tasks file via multipart form and saves it to a specified directory.
-func UploadLocalTasksFile() func(ctx *fiber.Ctx) error {
+func UploadLocalTasksFile(configFile config.Config) func(ctx *fiber.Ctx) error {
 	return func(ctx *fiber.Ctx) error {
 		// Retrieve file from the multipart form
 		file, err := ctx.FormFile("file")
@@ -90,9 +91,9 @@ func UploadLocalTasksFile() func(ctx *fiber.Ctx) error {
 		// Get the filename and the extension
 		filename := file.Filename
 
-		// FIXME: Implement robust path handling reading from .env
 		// Define the path to save the file
-		savePath := filepath.Join("/Users/simonecrenna/GolandProjects/dogeplus-backend/db/", filename) // Saves the file in the current directory
+		fileRepo := config.GetEnvWithFallback(configFile, config.TaskRoot)
+		savePath := filepath.Join(fileRepo, filename) // Saves the file in the current directory
 
 		// Save the file to the defined path
 		if err := ctx.SaveFile(file, savePath); err != nil {
