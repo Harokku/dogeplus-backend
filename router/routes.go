@@ -44,9 +44,9 @@ func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositor
 	//activeEvents.Get("/aggregated_status", )
 
 	// Event aggregation routes
-	completionAggreagtion := v1.Group("/completion_aggregation")
-	completionAggreagtion.Get("/", handlers.GetAllTaskCompletionInfo)
-	completionAggreagtion.Get("/:event_number", handlers.GetTaskCompletionInfoForKey)
+	completionAggregation := v1.Group("/completion_aggregation")
+	completionAggregation.Get("/", handlers.GetAllTaskCompletionInfo)
+	completionAggregation.Get("/:event_number", handlers.GetTaskCompletionInfoForKey)
 
 	// Event Escalation routes
 	aggregationEscalation := v1.Group("/escalation_aggregation")

@@ -131,7 +131,8 @@ func createTables(db *sql.DB) error {
 			location        text    not null,
 			location_detail text,
 			type            text    not null,
-			level			text 	not null)`,
+			level			text 	not null,
+			incident_level	text)`,
 	}
 
 	// Execute each command within the transaction

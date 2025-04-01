@@ -13,6 +13,7 @@ type Overview struct {
 	LocationDetail string    `json:"location_detail"`
 	Type           string    `json:"type"`
 	Level          string    `json:"level"`
+	IncidentLevel  string    `json:"incident_level"`
 }
 
 type OverviewRepository struct {
@@ -25,16 +26,16 @@ func NewOverviewRepository(db *sql.DB) *OverviewRepository {
 
 // Add inserts a new overview record into the database and returns an error if any operation fails.
 func (ov *OverviewRepository) Add(overview Overview) error {
-	query := `INSERT INTO overview (uuid, central_id, event_number, location, location_detail, type, level) VALUES (?,?,?,?,?,?,?)`
+	query := `INSERT INTO overview (uuid, central_id, event_number, location, location_detail, type, level, incident_level) VALUES (?,?,?,?,?,?,?,?)`
 
-	_, err := ov.db.Exec(query, uuid.New(), overview.CentralId, overview.EventNumber, overview.Location, overview.LocationDetail, overview.Type, overview.Level)
+	_, err := ov.db.Exec(query, uuid.New(), overview.CentralId, overview.EventNumber, overview.Location, overview.LocationDetail, overview.Type, overview.Level, overview.IncidentLevel)
 
 	return err
 }
 
 // GetAllOverview retrieves all overview records from the database and returns a slice of Overview or an error if it fails.
 func (ov *OverviewRepository) GetAllOverview() ([]Overview, error) {
-	query := `SELECT uuid, central_id, event_number, location, location_detail, type, level FROM overview`
+	query := `SELECT uuid, central_id, event_number, location, location_detail, type, level, incident_level FROM overview`
 
 	rows, err := ov.db.Query(query)
 	if err != nil {
@@ -47,7 +48,7 @@ func (ov *OverviewRepository) GetAllOverview() ([]Overview, error) {
 	// Scan rows to return slice
 	for rows.Next() {
 		var overview Overview
-		if err := rows.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level); err != nil {
+		if err := rows.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level, &overview.IncidentLevel); err != nil {
 			return nil, err
 		}
 		overviews = append(overviews, overview)
@@ -58,14 +59,14 @@ func (ov *OverviewRepository) GetAllOverview() ([]Overview, error) {
 
 // GetOverviewById retrieves an overview record by its event ID from the database.
 func (ov *OverviewRepository) GetOverviewById(eventId int) (Overview, error) {
-	query := `SELECT uuid, central_id, event_number, location, location_detail, type, level FROM overview WHERE event_number = ?`
+	query := `SELECT uuid, central_id, event_number, location, location_detail, type, level, incident_level FROM overview WHERE event_number = ?`
 
 	row := ov.db.QueryRow(query, eventId)
 
 	var overview Overview
 
 	// Scan row to return variable
-	if err := row.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level); err != nil {
+	if err := row.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level, &overview.IncidentLevel); err != nil {
 		return overview, err
 	}
 
@@ -74,7 +75,7 @@ func (ov *OverviewRepository) GetOverviewById(eventId int) (Overview, error) {
 
 // GetOverviewByCentralId retrieves an overview by the provided central ID from the database.
 func (ov *OverviewRepository) GetOverviewByCentralId(centralId string) ([]Overview, error) {
-	query := `SELECT uuid, central_id, event_number, location, location_detail, type, level FROM overview WHERE central_id = ?`
+	query := `SELECT uuid, central_id, event_number, location, location_detail, type, level, incident_level FROM overview WHERE central_id = ?`
 
 	rows, err := ov.db.Query(query, centralId)
 	if err != nil {
@@ -87,7 +88,7 @@ func (ov *OverviewRepository) GetOverviewByCentralId(centralId string) ([]Overvi
 	// Scan rows to return slice
 	for rows.Next() {
 		var overview Overview
-		if err := rows.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level); err != nil {
+		if err := rows.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level, &overview.IncidentLevel); err != nil {
 			return nil, err
 		}
 		overviews = append(overviews, overview)

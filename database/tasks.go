@@ -486,8 +486,12 @@ func FilterTasksForEscalation(tasks []Task, category, startingEscalation, finalE
 	if !startOk || !endOk {
 		return nil, fmt.Errorf("invalid escalation levels: %s or %s", startingEscalation, finalEscalation)
 	}
+	// New condition to handle same starting and final escalation levels
 	if startIdx == endIdx {
-		return nil, fmt.Errorf("starting and final escalation levels cannot be the same")
+		// Allow processing if both are "incidente"
+		if !(strings.EqualFold(startingEscalation, "incidente") && strings.EqualFold(finalEscalation, "incidente")) {
+			return nil, fmt.Errorf("starting and final escalation levels cannot be the same")
+		}
 	}
 	// Check if incidentLevel is required and provided
 	if strings.ToLower(finalEscalation) == "incidente" && incidentLevel == "" {
