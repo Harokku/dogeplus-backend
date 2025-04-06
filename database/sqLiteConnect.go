@@ -133,6 +133,14 @@ func createTables(db *sql.DB) error {
 			type            text    not null,
 			level			text 	not null,
 			incident_level	text)`,
+
+		// Escalation levels definition table
+		`create table IF NOT EXISTS escalation_levels(
+			uuid        TEXT not null,
+			name        text not null,
+			description text,
+				constraint escalation_levels_pk
+				primary key (uuid));`,
 	}
 
 	// Execute each command within the transaction
@@ -160,15 +168,17 @@ type Repositories struct {
 	Overview                    *OverviewRepository
 	TaskCompletionAggregation   *TaskCompletionMap
 	EscalationLevelsAggregation *EscalationLevels
+	EscalationLevelsDefinition  *EscalationLevelsDefinitionRepository
 }
 
 // NewRepositories initializes a new instance of Repositories with the provided *sql.DB object.
 // It returns a pointer to the created Repositories.
 func NewRepositories(db *sql.DB) *Repositories {
 	repos := &Repositories{
-		Tasks:        NewTaskRepository(db),
-		ActiveEvents: NewActiveEventRepository(db),
-		Overview:     NewOverviewRepository(db),
+		Tasks:                      NewTaskRepository(db),
+		ActiveEvents:               NewActiveEventRepository(db),
+		Overview:                   NewOverviewRepository(db),
+		EscalationLevelsDefinition: NewEscalationLevelsDefinitionRepository(db),
 	}
 
 	// initialize aggregation map using data from db trough repos
