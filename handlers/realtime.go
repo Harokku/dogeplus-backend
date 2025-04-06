@@ -7,28 +7,30 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/gofiber/websocket/v2"
+	"github.com/google/uuid"
 	"time"
 )
 
 // WsUpgrader is a middleware that upgrades HTTP connections to WebSocket connections.
-// It reads the client ID from cookies and sets it in the context for use by the WebSocket handler.
-// If the client ID is empty, it uses the IP address as a fallback.
+// It generates a unique ID for each WebSocket connection by combining the IP address with a UUID.
+// This ensures that each browser tab gets a unique identifier, even if they're in the same browser.
 func WsUpgrader(manager *broadcast.ConnectionManager) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
-		// Read the id from http request
-		clientID := ctx.Cookies("client_id")
+		// Always generate a new unique ID for each connection
+		// This ensures each tab gets a unique identifier, even in the same browser
+		tabUUID := uuid.New().String()
+		clientID := ctx.IP() + "-" + tabUUID
 
-		// If client ID is empty, use the IP address as a fallback
-		if clientID == "" {
-			clientID = ctx.IP()
-			// Set the cookie for future connections
-			ctx.Cookie(&fiber.Cookie{
-				Name:     "client_id",
-				Value:    clientID,
-				Expires:  time.Now().Add(24 * time.Hour),
-				HTTPOnly: true,
-			})
-		}
+		// Set the cookie with SameSite=Strict to prevent it from being sent in cross-site requests
+		// Path=/ ensures the cookie is available for the entire domain
+		ctx.Cookie(&fiber.Cookie{
+			Name:     "client_id",
+			Value:    clientID,
+			Expires:  time.Now().Add(24 * time.Hour),
+			HTTPOnly: true,
+			SameSite: "strict",
+			Path:     "/",
+		})
 
 		// Check if is an update request, set the local with unique id and pass to next handler
 		if websocket.IsWebSocketUpgrade(ctx) {
