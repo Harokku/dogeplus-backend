@@ -23,9 +23,7 @@ func main() {
 	repos := database.NewRepositories(db)
 
 	// Init connection manager for realtime broadcast
-	connectionManager := &broadcast.ConnectionManager{
-		Clients: make(map[broadcast.Broadcaster]bool),
-	}
+	connectionManager := broadcast.NewConnectionManager()
 
 	// Init Fiber app
 	app := router.NewFiberApp()
