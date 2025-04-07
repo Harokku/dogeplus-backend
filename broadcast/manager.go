@@ -92,6 +92,44 @@ func (cm *ConnectionManager) Broadcast(message []byte) {
 	}
 }
 
+// BroadcastToTopic sends a message to all connected clients subscribed to the specified topic.
+// It acquires a read lock on the ConnectionManager to ensure thread safety.
+// It releases the read lock when the function exits using a deferred statement.
+// It iterates over each client in the Clients map, checks if the client is subscribed to the topic,
+// and calls the Send method to send the message if it is.
+// If there is an error while sending the message to a client, it logs the error and continues
+// broadcasting to other clients.
+func (cm *ConnectionManager) BroadcastToTopic(topic string, message []byte) {
+	cm.lock.RLock()
+	defer cm.lock.RUnlock()
+
+	for id, client := range cm.Clients {
+		if !client.IsConnected() {
+			continue
+		}
+
+		// Check if the client is subscribed to the topic
+		topics := client.GetTopics()
+		subscribed := false
+		for _, t := range topics {
+			if t == topic {
+				subscribed = true
+				break
+			}
+		}
+
+		if !subscribed {
+			continue
+		}
+
+		err := client.Send(message)
+		if err != nil {
+			log.Errorf("Error broadcasting to client %s on topic %s: %v", id, topic, err)
+			// Continue broadcasting to other clients
+		}
+	}
+}
+
 // heartbeatLoop sends periodic heartbeats to all clients
 func (cm *ConnectionManager) heartbeatLoop() {
 	ticker := time.NewTicker(cm.heartbeatTick)

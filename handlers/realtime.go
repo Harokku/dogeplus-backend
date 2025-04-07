@@ -125,14 +125,58 @@ func WsHandler(cm *broadcast.ConnectionManager) fiber.Handler {
 					var msg map[string]interface{}
 					if err := json.Unmarshal(messageData, &msg); err == nil {
 						// Handle structured messages if needed
-						if msgType, ok := msg["type"].(string); ok && msgType == "heartbeat" {
-							// Respond to heartbeat
-							heartbeatResponse := map[string]interface{}{
-								"type":      "heartbeat_ack",
-								"timestamp": time.Now().Unix(),
+						if msgType, ok := msg["type"].(string); ok {
+							switch msgType {
+							case "heartbeat":
+								// Respond to heartbeat
+								heartbeatResponse := map[string]interface{}{
+									"type":      "heartbeat_ack",
+									"timestamp": time.Now().Unix(),
+								}
+								heartbeatJSON, _ := json.Marshal(heartbeatResponse)
+								_ = wsBroadcaster.Send(heartbeatJSON)
+							case "subscribe":
+								// Handle topic subscription
+								if topic, ok := msg["topic"].(string); ok && topic != "" {
+									err := wsBroadcaster.Subscribe(topic)
+									response := map[string]interface{}{
+										"type":    "subscribe_ack",
+										"topic":   topic,
+										"success": err == nil,
+									}
+									if err != nil {
+										response["error"] = err.Error()
+									}
+									responseJSON, _ := json.Marshal(response)
+									_ = wsBroadcaster.Send(responseJSON)
+									log.Infof("Client %s subscribed to topic: %s", clientID, topic)
+								}
+							case "unsubscribe":
+								// Handle topic unsubscription
+								if topic, ok := msg["topic"].(string); ok && topic != "" {
+									err := wsBroadcaster.Unsubscribe(topic)
+									response := map[string]interface{}{
+										"type":    "unsubscribe_ack",
+										"topic":   topic,
+										"success": err == nil,
+									}
+									if err != nil {
+										response["error"] = err.Error()
+									}
+									responseJSON, _ := json.Marshal(response)
+									_ = wsBroadcaster.Send(responseJSON)
+									log.Infof("Client %s unsubscribed from topic: %s", clientID, topic)
+								}
+							case "get_topics":
+								// Return the list of subscribed topics
+								topics := wsBroadcaster.GetTopics()
+								response := map[string]interface{}{
+									"type":   "topics",
+									"topics": topics,
+								}
+								responseJSON, _ := json.Marshal(response)
+								_ = wsBroadcaster.Send(responseJSON)
 							}
-							heartbeatJSON, _ := json.Marshal(heartbeatResponse)
-							_ = wsBroadcaster.Send(heartbeatJSON)
 						}
 					}
 				}

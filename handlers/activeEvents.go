@@ -300,7 +300,14 @@ func UpdateEventTask(repos *database.Repositories, cm *broadcast.ConnectionManag
 		if err != nil {
 			log.Errorf("Error marshalling updated task: %s\n", err)
 		} else {
-			cm.Broadcast(updatedTaskJson)
+			// Broadcast to the "event_updates" topic and to all clients
+			// This allows clients to subscribe only to event updates if they want
+			cm.BroadcastToTopic("event_updates", updatedTaskJson)
+
+			// Also broadcast to a topic specific to this event's central ID
+			// This allows clients to subscribe only to updates for a specific central
+			centralTopic := "central_" + updatedTask.CentralID
+			cm.BroadcastToTopic(centralTopic, updatedTaskJson)
 		}
 
 		// Send response wia http

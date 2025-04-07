@@ -14,6 +14,7 @@ type Service struct {
 	Id           string          // Client identifier
 	connected    bool            // Connection state
 	lastActivity time.Time       // Time of last activity
+	topics       []string        // Topics the client is subscribed to
 	mu           sync.Mutex      // Mutex for thread safety
 }
 
@@ -24,6 +25,7 @@ func NewService(id string) *Service {
 		Id:           id,
 		connected:    false,
 		lastActivity: time.Now(),
+		topics:       []string{},
 	}
 }
 
@@ -99,4 +101,52 @@ func (s *Service) UpdateConnection(conn *websocket.Conn) {
 	s.Conn = conn
 	s.connected = true
 	s.lastActivity = time.Now()
+}
+
+// Subscribe adds a topic to the list of topics the client is subscribed to.
+// It returns nil if the topic is successfully added or if the client is already subscribed to the topic.
+func (s *Service) Subscribe(topic string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if the client is already subscribed to the topic
+	for _, t := range s.topics {
+		if t == topic {
+			return nil // Already subscribed
+		}
+	}
+
+	// Add the topic to the list
+	s.topics = append(s.topics, topic)
+	return nil
+}
+
+// Unsubscribe removes a topic from the list of topics the client is subscribed to.
+// It returns nil if the topic is successfully removed or if the client is not subscribed to the topic.
+func (s *Service) Unsubscribe(topic string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find the index of the topic in the list
+	for i, t := range s.topics {
+		if t == topic {
+			// Remove the topic from the list
+			s.topics = append(s.topics[:i], s.topics[i+1:]...)
+			return nil
+		}
+	}
+
+	// Topic not found, client is not subscribed to it
+	return nil
+}
+
+// GetTopics returns a copy of the list of topics the client is subscribed to.
+func (s *Service) GetTopics() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Create a copy of the topics slice to avoid race conditions
+	topics := make([]string, len(s.topics))
+	copy(topics, s.topics)
+	return topics
 }
