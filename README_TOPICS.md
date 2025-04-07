@@ -80,9 +80,9 @@ The server will respond with a list of topics:
 
 The following topics are currently available:
 
-### `event_updates`
+### `task_completion_update`
 
-Subscribe to this topic to receive updates about event tasks. This includes when an event task is updated, such as when its status changes.
+Subscribe to this topic to receive updates about event tasks. This includes when an event task is updated, such as when its status changes. This topic is used by the `UpdateEventTask` function.
 
 Example message:
 
@@ -107,11 +107,31 @@ Example message:
 }
 ```
 
+### `event_updates`
+
+Subscribe to this topic to receive updates about events, including when new overviews are added. This topic is used by the `PostNewOverview` function.
+
+Example message:
+
+```json
+{
+  "message": "Overview added successfully",
+  "data": {
+    "event_number": 123,
+    "central_id": "ABC123",
+    "type": "fire",
+    "level": "allarme",
+    "incident_level": "high",
+    "timestamp": "2023-01-01T12:00:00Z"
+  }
+}
+```
+
 ### `central_[ID]`
 
-Subscribe to this topic to receive updates about events for a specific central ID. Replace `[ID]` with the actual central ID you're interested in.
+Subscribe to this topic to receive updates about events for a specific central ID. Replace `[ID]` with the actual central ID you're interested in (e.g., `central_ABC123`). This topic is used by the `PostNewOverview` function.
 
-Example: `central_ABC123`
+The message format is the same as for the `event_updates` topic.
 
 ## Implementation Details
 
@@ -122,9 +142,71 @@ The topic-based subscription system is implemented using the following component
 3. The `ConnectionManager` in `broadcast/manager.go` provides a method for broadcasting messages to clients subscribed to a specific topic.
 4. The `WsHandler` in `handlers/realtime.go` handles WebSocket messages for topic subscription and unsubscription.
 
-## Example: Subscribing to Event Updates for a Specific Central
+## Examples
 
-If you're only interested in event updates for a specific central (e.g., "ABC123"), you can subscribe to the `central_ABC123` topic:
+### Example: Subscribing to Task Completion Updates
+
+To receive updates about task completions, you can subscribe to the `task_completion_update` topic:
+
+```javascript
+// Connect to the WebSocket server
+const socket = new WebSocket('ws://your-server/ws');
+
+socket.onopen = function() {
+  // Subscribe to task completion updates
+  socket.send(JSON.stringify({
+    type: 'subscribe',
+    topic: 'task_completion_update'
+  }));
+};
+
+socket.onmessage = function(event) {
+  const message = JSON.parse(event.data);
+
+  // Handle different message types
+  if (message.type === 'subscribe_ack') {
+    console.log(`Subscribed to ${message.topic}`);
+  } else if (message.Result === 'Event Task Updated') {
+    console.log('Received task completion update:', message.Events);
+  }
+};
+```
+
+This way, you'll receive updates for all task completions in the system.
+
+### Example: Subscribing to Event Updates
+
+To receive updates about all events, including when new overviews are added, you can subscribe to the `event_updates` topic:
+
+```javascript
+// Connect to the WebSocket server
+const socket = new WebSocket('ws://your-server/ws');
+
+socket.onopen = function() {
+  // Subscribe to event updates
+  socket.send(JSON.stringify({
+    type: 'subscribe',
+    topic: 'event_updates'
+  }));
+};
+
+socket.onmessage = function(event) {
+  const message = JSON.parse(event.data);
+
+  // Handle different message types
+  if (message.type === 'subscribe_ack') {
+    console.log(`Subscribed to ${message.topic}`);
+  } else if (message.message === 'Overview added successfully') {
+    console.log('Received event update:', message.data);
+  }
+};
+```
+
+This way, you'll receive updates for all events in the system.
+
+### Example: Subscribing to Updates for a Specific Central
+
+If you're only interested in updates for a specific central (e.g., "ABC123"), you can subscribe to the `central_ABC123` topic:
 
 ```javascript
 // Connect to the WebSocket server
@@ -140,12 +222,12 @@ socket.onopen = function() {
 
 socket.onmessage = function(event) {
   const message = JSON.parse(event.data);
-  
+
   // Handle different message types
   if (message.type === 'subscribe_ack') {
     console.log(`Subscribed to ${message.topic}`);
-  } else if (message.Result === 'Event Task Updated') {
-    console.log('Received event update:', message.Events);
+  } else if (message.message === 'Overview added successfully') {
+    console.log('Received update for central ABC123:', message.data);
   }
 };
 ```

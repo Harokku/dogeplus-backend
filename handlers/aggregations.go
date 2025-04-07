@@ -117,9 +117,11 @@ func PostNewOverview(repos *database.Repositories, cm *broadcast.ConnectionManag
 			log.Errorf("Failed to marshal overview to JSON: %v\n", err)
 		} else {
 			// Broadcast to the "event_updates" topic
+			// This allows clients to subscribe to event updates
 			cm.BroadcastToTopic("event_updates", responseJson)
 
 			// Also broadcast to a topic specific to this event's central ID
+			// This allows clients to subscribe only to updates for a specific central
 			centralTopic := "central_" + request.CentralId
 			cm.BroadcastToTopic(centralTopic, responseJson)
 		}
