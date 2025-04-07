@@ -248,7 +248,6 @@ func GetSpecificEvent(repos *database.Repositories) func(ctx *fiber.Ctx) error {
 // It retrieves the client's IP address from the request context and updates the event's IP address field.
 // It updates the event's status, IP address, and modified by fields in the database.
 // If updating the event fails, it returns a "500 Internal Server Error" error.
-// TODO: Implement broadcast to all clients
 // If the request is successful, it returns a JSON response with the "Result" field set to "Event Task Updated"
 // and the updated event information in the "Events" field.
 // repos is a pointer to a database.Repositories struct that contains the repositories for managing active events.

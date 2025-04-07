@@ -345,4 +345,37 @@ func GetEscalationDetailsByCentralId(repos *database.Repositories) func(c *fiber
 	}
 }
 
+// GetEscalationDetailsByCentralIdAndEventNumber fetches the overview details for a given central ID and event number.
+func GetEscalationDetailsByCentralIdAndEventNumber(repos *database.Repositories) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		centralID := c.Params("central_id")
+		eventNumber, err := c.ParamsInt("event_number")
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error":  "Invalid event number",
+				"detail": err.Error(),
+			})
+		}
+
+		overview, err := repos.Overview.GetOverviewByCentralIdAndEventNumber(centralID, eventNumber)
+
+		// Return error response if database operation fails
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":  err.Error(),
+				"detail": err.Error(),
+			})
+		}
+
+		// Return the response as JSON
+		return c.Status(fiber.StatusOK).JSON(
+			fiber.Map{
+				"result": "Retrieved events for central ID and event number",
+				"length": len(overview),
+				"data":   overview,
+			},
+		)
+	}
+}
+
 //endregion
