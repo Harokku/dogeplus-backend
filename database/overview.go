@@ -25,10 +25,17 @@ func NewOverviewRepository(db *sql.DB) *OverviewRepository {
 }
 
 // Add inserts a new overview record into the database and returns an error if any operation fails.
-func (ov *OverviewRepository) Add(overview Overview) error {
+// It also updates the overview struct with the generated UUID.
+func (ov *OverviewRepository) Add(overview *Overview) error {
 	query := `INSERT INTO overview (uuid, central_id, event_number, location, location_detail, type, level, incident_level) VALUES (?,?,?,?,?,?,?,?)`
 
-	_, err := ov.db.Exec(query, uuid.New(), overview.CentralId, overview.EventNumber, overview.Location, overview.LocationDetail, overview.Type, overview.Level, overview.IncidentLevel)
+	// Generate a new UUID
+	newUUID := uuid.New()
+
+	// Update the overview struct with the generated UUID
+	overview.UUID = newUUID
+
+	_, err := ov.db.Exec(query, newUUID, overview.CentralId, overview.EventNumber, overview.Location, overview.LocationDetail, overview.Type, overview.Level, overview.IncidentLevel)
 
 	return err
 }

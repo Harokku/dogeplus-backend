@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"dogeplus-backend/broadcast"
 	"dogeplus-backend/config"
 	"dogeplus-backend/database"
+	"encoding/json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"slices"
@@ -80,7 +82,8 @@ type EscalateRequest struct {
 
 // PostNewOverview handles the posting of new overview records to the database.
 // It parses the request body, validates it, and uses the repository to add the overview.
-func PostNewOverview(repos *database.Repositories) func(c *fiber.Ctx) error {
+// It also broadcasts the new overview to the event_updates topic and a central-specific topic.
+func PostNewOverview(repos *database.Repositories, cm *broadcast.ConnectionManager) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		// Parse request body
 		var request database.Overview
@@ -91,7 +94,7 @@ func PostNewOverview(repos *database.Repositories) func(c *fiber.Ctx) error {
 		}
 
 		// Add the overview
-		err := repos.Overview.Add(request)
+		err := repos.Overview.Add(&request)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
@@ -101,9 +104,27 @@ func PostNewOverview(repos *database.Repositories) func(c *fiber.Ctx) error {
 		// Sync escalation levels in memory map
 		repos.EscalationLevelsAggregation.Add(request.EventNumber, database.Level(request.Level))
 
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		// Build response map for both HTTP response and broadcast
+		responseMap := fiber.Map{
 			"message": "Overview added successfully",
-		})
+			"data":    request,
+		}
+
+		// Send broadcast response via connection manager in JSON format
+		// If error skip broadcast phase
+		responseJson, err := json.Marshal(responseMap)
+		if err != nil {
+			log.Errorf("Failed to marshal overview to JSON: %v\n", err)
+		} else {
+			// Broadcast to the "event_updates" topic
+			cm.BroadcastToTopic("event_updates", responseJson)
+
+			// Also broadcast to a topic specific to this event's central ID
+			centralTopic := "central_" + request.CentralId
+			cm.BroadcastToTopic(centralTopic, responseJson)
+		}
+
+		return c.Status(fiber.StatusOK).JSON(responseMap)
 	}
 }
 

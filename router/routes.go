@@ -37,7 +37,7 @@ func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositor
 	// ActiveEvents routes
 	activeEvents := v1.Group("/active-events")
 	activeEvents.Post("/", handlers.CreateNewEvent(repos, config))
-	activeEvents.Post("/overview", handlers.PostNewOverview(repos))
+	activeEvents.Post("/overview", handlers.PostNewOverview(repos, cm))
 	activeEvents.Put("/", handlers.UpdateEventTask(repos, cm))
 	activeEvents.Get("/:central_id", handlers.GetSingleEvent(repos))
 	activeEvents.Get("/:central_id/:event_nr", handlers.GetSpecificEvent(repos))
