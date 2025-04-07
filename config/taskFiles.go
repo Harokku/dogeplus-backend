@@ -1,3 +1,7 @@
+// Package config provides functionality for loading and managing application configuration.
+// It handles reading configuration from both TOML files and environment variables,
+// providing fallback mechanisms and validation. The package also includes utilities
+// for file path sanitization and Excel file loading based on configuration settings.
 package config
 
 import (

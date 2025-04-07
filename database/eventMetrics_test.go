@@ -1,3 +1,7 @@
+// Package database provides functionality for interacting with the SQLite database.
+// It defines repositories for managing different types of data (tasks, active events, etc.),
+// includes functions for connecting to the database, creating tables, and performing CRUD operations,
+// and provides utilities for data aggregation, filtering, and merging.
 package database
 
 import (

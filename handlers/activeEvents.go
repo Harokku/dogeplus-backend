@@ -1,3 +1,7 @@
+// Package handlers provides HTTP request handlers for the DogePlus Backend API.
+// It contains functions that process incoming HTTP requests, interact with the database
+// repositories, and return appropriate HTTP responses. The handlers are organized by
+// functionality, with separate files for different aspects of the application.
 package handlers
 
 import (

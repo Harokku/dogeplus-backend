@@ -1,3 +1,7 @@
+// Package broadcast provides functionality for real-time message broadcasting to connected clients.
+// It defines interfaces and implementations for managing client connections, sending messages,
+// and handling topic-based subscriptions. The package includes heartbeat mechanisms and
+// connection monitoring to ensure reliable real-time communication.
 package broadcast
 
 import (
