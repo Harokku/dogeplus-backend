@@ -45,8 +45,8 @@ func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositor
 
 	// Event aggregation routes
 	completionAggregation := v1.Group("/completion_aggregation")
-	completionAggregation.Get("/", handlers.GetAllTaskCompletionInfo)
-	completionAggregation.Get("/:event_number", handlers.GetTaskCompletionInfoForKey)
+	completionAggregation.Get("/", handlers.GetAllTaskCompletionInfo(cm))
+	completionAggregation.Get("/:event_number", handlers.GetTaskCompletionInfoForKey(cm))
 
 	// Event Escalation routes
 	aggregationEscalation := v1.Group("/escalation_aggregation")
@@ -54,7 +54,7 @@ func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositor
 	aggregationEscalation.Get("/details", handlers.GetAllEscalationDetails(repos))
 	aggregationEscalation.Get("/details/:central_id", handlers.GetEscalationDetailsByCentralId(repos))
 	aggregationEscalation.Get("/details/:central_id/:event_number", handlers.GetEscalationDetailsByCentralIdAndEventNumber(repos))
-	aggregationEscalation.Post("/escalate", handlers.PostEscalate(repos, config))
+	aggregationEscalation.Post("/escalate", handlers.PostEscalate(repos, config, cm))
 	aggregationEscalation.Post("/deescalate", handlers.PostDeEscalate(repos))
 
 	// Escalation Levels Definitions

@@ -207,7 +207,7 @@ func NewRepositories(db *sql.DB) *Repositories {
 	initialEscalationLevelsAggregation := GetEscalationLevelsInstance(convertedEscalationData)
 
 	// initialize task aggregation repo
-	repos.TaskCompletionAggregation = GetTaskCompletionMapInstance(initialTaskAggregation)
+	repos.TaskCompletionAggregation = GetTaskCompletionMapInstance(initialTaskAggregation, nil)
 	repos.EscalationLevelsAggregation = initialEscalationLevelsAggregation
 
 	return repos

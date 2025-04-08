@@ -5,8 +5,16 @@
 package database
 
 import (
+	"dogeplus-backend/broadcast"
+	"encoding/json"
 	"fmt"
+	"github.com/gofiber/fiber/v2/log"
 	"sync"
+)
+
+const (
+	// TopicTaskCompletionMapUpdate is the topic for broadcasting TaskCompletionMap updates
+	TopicTaskCompletionMapUpdate = "task_completion_map_update"
 )
 
 var (
@@ -36,34 +44,31 @@ func (tci *TaskCompletionInfo) Ratio() float32 {
 
 // TaskCompletionMap is a struct type that represents a map of task completion information
 //
-// It has two fields 'sync.RWMutex' for concurrent-safe access to the map and 'Data' which is the actual map
-// that associates task number (string) with their completion information (TaskCompletionInfo)
+// It has three fields:
+// - 'sync.RWMutex' for concurrent-safe access to the map
+// - 'Data' which is the actual map that associates task number (int) with their completion information (TaskCompletionInfo)
+// - 'cm' which is a reference to the ConnectionManager for broadcasting updates
 type TaskCompletionMap struct {
 	mu   sync.RWMutex
 	Data map[int]TaskCompletionInfo
+	cm   *broadcast.ConnectionManager
 }
 
-// UpdateEventStatus updates the status of a specific event in the TaskCompletionMap.
-// It takes the event number and the new status as parameters.
-// If the event number exists in the map, the function updates the completion information
-// based on the new status. If the status is "done", the number of completed tasks is
-// incremented by 1. If the status is "working" or "notdone", the number of completed tasks
-// is decremented by 1. The updated completion information is then stored back in the map.
-// If the event number does not exist in the map, no action is taken.
-// This method uses a lock to ensure concurrent-safe access to the map.
+// UpdateEventStatus updates the completion count of a specific event based on the provided status (e.g., "done").
 func (tcm *TaskCompletionMap) UpdateEventStatus(eventNumber int, status string) {
 	tcm.mu.Lock()
-	defer tcm.mu.Unlock()
 
 	if data, ok := tcm.Data[eventNumber]; ok {
 		if status == "done" {
 			data.Completed++
 		}
-		//} else if status == "working" || status == "notdone" {
-		//	data.Completed--
-		//}
 		tcm.Data[eventNumber] = data
 	}
+
+	tcm.mu.Unlock()
+
+	// Broadcast the update
+	tcm.broadcastUpdate(eventNumber)
 }
 
 // AddMultipleNotDoneTasks is a method of the TaskCompletionMap type. It adds the specified number
@@ -72,12 +77,16 @@ func (tcm *TaskCompletionMap) UpdateEventStatus(eventNumber int, status string) 
 // to the map.
 func (tcm *TaskCompletionMap) AddMultipleNotDoneTasks(eventNumber int, numberOfTasks int) {
 	tcm.mu.Lock()
-	defer tcm.mu.Unlock()
 
 	if data, ok := tcm.Data[eventNumber]; ok {
 		data.Total += numberOfTasks
 		tcm.Data[eventNumber] = data
 	}
+
+	tcm.mu.Unlock()
+
+	// Broadcast the update
+	tcm.broadcastUpdate(eventNumber)
 }
 
 // AddNewEvent adds a new event to the TaskCompletionMap with the specified
@@ -86,9 +95,9 @@ func (tcm *TaskCompletionMap) AddMultipleNotDoneTasks(eventNumber int, numberOfT
 // concurrent-safe access to the map.
 func (tcm *TaskCompletionMap) AddNewEvent(eventNumber int, numberOfTasks int) {
 	tcm.mu.Lock()
-	defer tcm.mu.Unlock()
 
 	if _, ok := tcm.Data[eventNumber]; ok {
+		tcm.mu.Unlock()
 		return
 	}
 
@@ -96,6 +105,11 @@ func (tcm *TaskCompletionMap) AddNewEvent(eventNumber int, numberOfTasks int) {
 		Completed: 0,
 		Total:     numberOfTasks,
 	}
+
+	tcm.mu.Unlock()
+
+	// Broadcast the update
+	tcm.broadcastUpdate(eventNumber)
 }
 
 // DeleteEvent removes an event from the TaskCompletionMap with the specified
@@ -103,8 +117,60 @@ func (tcm *TaskCompletionMap) AddNewEvent(eventNumber int, numberOfTasks int) {
 // This method uses a lock to ensure concurrent-safe access to the map.
 func (tcm *TaskCompletionMap) DeleteEvent(eventId int) {
 	tcm.mu.Lock()
-	defer tcm.mu.Unlock()
 	delete(tcm.Data, eventId)
+	tcm.mu.Unlock()
+
+	// Broadcast the update - send full map since an event was deleted
+	tcm.broadcastUpdate(0)
+}
+
+// broadcastUpdate sends the current state of the TaskCompletionMap to all subscribers.
+// It marshals the task completion data to JSON and broadcasts it to the TopicTaskCompletionMapUpdate topic.
+//
+// Parameters:
+//   - eventNumber: the number of the event to broadcast. If eventNumber is 0, the entire map is broadcast.
+//     If eventNumber is greater than 0, only the data for that specific event is broadcast.
+//
+// The method does nothing if the ConnectionManager is nil or if the specified event number
+// does not exist in the map.
+func (tcm *TaskCompletionMap) broadcastUpdate(eventNumber int) {
+	if tcm.cm == nil {
+		return // No ConnectionManager, can't broadcast
+	}
+
+	tcm.mu.RLock()
+	var data interface{}
+
+	if eventNumber > 0 {
+		// If a specific event number is provided, only broadcast that event's data
+		if info, ok := tcm.Data[eventNumber]; ok {
+			data = map[string]interface{}{
+				"event_number": eventNumber,
+				"info":         info,
+			}
+		} else {
+			tcm.mu.RUnlock()
+			return // Event not found, nothing to broadcast
+		}
+	} else {
+		// Otherwise broadcast the entire map
+		data = tcm.Data
+	}
+	tcm.mu.RUnlock()
+
+	message := map[string]interface{}{
+		"type": "task_completion_update",
+		"data": data,
+	}
+
+	jsonData, err := json.Marshal(message)
+	if err != nil {
+		// Log error but continue
+		log.Errorf("Error marshalling task completion data: %v", err)
+		return
+	}
+
+	tcm.cm.BroadcastToTopic(TopicTaskCompletionMapUpdate, jsonData)
 }
 
 // GetTaskCompletionMapInstance retrieves the singleton instance of TaskCompletionMap.
@@ -115,11 +181,15 @@ func (tcm *TaskCompletionMap) DeleteEvent(eventId int) {
 //
 // This function is thread-safe due to the use of sync.Once.
 // It returns a pointer to the TaskCompletionMap instance.
-func GetTaskCompletionMapInstance(events []AggregatedActiveEvents) *TaskCompletionMap {
+//
+// The cm parameter is a pointer to a ConnectionManager instance that will be used
+// to broadcast updates to the TaskCompletionMap. If nil, no broadcasting will occur.
+func GetTaskCompletionMapInstance(events []AggregatedActiveEvents, cm *broadcast.ConnectionManager) *TaskCompletionMap {
 	taskCompletionOnce.Do(func() {
 		taskCompletionInstance = &TaskCompletionMap{
 			Data: make(map[int]TaskCompletionInfo),
 			mu:   sync.RWMutex{},
+			cm:   cm,
 		}
 		for _, event := range events {
 			taskCompletionInstance.Data[event.EventNumber] = TaskCompletionInfo{
@@ -128,6 +198,12 @@ func GetTaskCompletionMapInstance(events []AggregatedActiveEvents) *TaskCompleti
 			}
 		}
 	})
+
+	// Update the ConnectionManager if it's provided and different from the current one
+	if cm != nil && taskCompletionInstance.cm != cm {
+		taskCompletionInstance.cm = cm
+	}
+
 	return taskCompletionInstance
 }
 

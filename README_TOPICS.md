@@ -133,6 +133,43 @@ Subscribe to this topic to receive updates about events for a specific central I
 
 The message format is the same as for the `event_updates` topic.
 
+### `task_completion_map_update`
+
+Subscribe to this topic to receive real-time updates about task completion progress. This includes when an event's tasks are updated, added, or deleted. This topic is used by the TaskCompletionMap methods: `UpdateEventStatus`, `AddMultipleNotDoneTasks`, `AddNewEvent`, and `DeleteEvent`.
+
+The message format depends on whether a specific event is updated or the entire map is broadcast:
+
+For a specific event update:
+```json
+{
+  "type": "task_completion_update",
+  "data": {
+    "event_number": 123,
+    "info": {
+      "Completed": 5,
+      "Total": 10
+    }
+  }
+}
+```
+
+For a full map update (e.g., when an event is deleted):
+```json
+{
+  "type": "task_completion_update",
+  "data": {
+    "123": {
+      "Completed": 5,
+      "Total": 10
+    },
+    "456": {
+      "Completed": 2,
+      "Total": 8
+    }
+  }
+}
+```
+
 ## Implementation Details
 
 The topic-based subscription system is implemented using the following components:
@@ -233,3 +270,69 @@ socket.onmessage = function(event) {
 ```
 
 This way, you'll only receive updates for events related to central ABC123, reducing bandwidth and CPU usage.
+
+### Example: Subscribing to Task Completion Map Updates
+
+To receive real-time updates about task completion progress, you can subscribe to the `task_completion_map_update` topic:
+
+```javascript
+// Connect to the WebSocket server
+const socket = new WebSocket('ws://your-server/ws');
+
+socket.onopen = function() {
+  // Subscribe to task completion map updates
+  socket.send(JSON.stringify({
+    type: 'subscribe',
+    topic: 'task_completion_map_update'
+  }));
+};
+
+socket.onmessage = function(event) {
+  const message = JSON.parse(event.data);
+
+  // Handle different message types
+  if (message.type === 'subscribe_ack') {
+    console.log(`Subscribed to ${message.topic}`);
+  } else if (message.type === 'task_completion_update') {
+    // Check if this is a specific event update or a full map update
+    if (message.data.event_number) {
+      // This is a specific event update
+      const eventNumber = message.data.event_number;
+      const completed = message.data.info.Completed;
+      const total = message.data.info.Total;
+      const percentage = (completed / total) * 100;
+
+      console.log(`Event ${eventNumber}: ${completed}/${total} tasks completed (${percentage.toFixed(2)}%)`);
+      // Update UI for this specific event
+      updateEventProgress(eventNumber, completed, total);
+    } else {
+      // This is a full map update
+      console.log('Received full task completion map update:', message.data);
+      // Update UI for all events
+      updateAllEventsProgress(message.data);
+    }
+  }
+};
+
+// Function to update the UI for a specific event
+function updateEventProgress(eventNumber, completed, total) {
+  // Update progress bars, counters, etc. for this event
+  const progressBar = document.getElementById(`progress-${eventNumber}`);
+  if (progressBar) {
+    const percentage = (completed / total) * 100;
+    progressBar.style.width = `${percentage}%`;
+    progressBar.setAttribute('aria-valuenow', percentage);
+    document.getElementById(`progress-text-${eventNumber}`).textContent = `${completed}/${total}`;
+  }
+}
+
+// Function to update the UI for all events
+function updateAllEventsProgress(data) {
+  // Iterate through all events in the data and update their UI
+  for (const [eventNumber, info] of Object.entries(data)) {
+    updateEventProgress(parseInt(eventNumber), info.Completed, info.Total);
+  }
+}
+```
+
+This way, you'll receive real-time updates about task completion progress for all events in the system, allowing you to display accurate progress information to users without requiring page refreshes.

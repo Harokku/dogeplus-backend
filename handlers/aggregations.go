@@ -26,18 +26,20 @@ type taskCompletionInfo struct {
 // region TaskCompletionInfo
 
 // GetAllTaskCompletionInfo returns a JSON representation of the task completion information for all tasks.
-func GetAllTaskCompletionInfo(c *fiber.Ctx) error {
-	taskMap := database.GetTaskCompletionMapInstance(nil)
+func GetAllTaskCompletionInfo(cm *broadcast.ConnectionManager) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		taskMap := database.GetTaskCompletionMapInstance(nil, cm)
 
-	allTasks := make(map[int]taskCompletionInfo)
-	for key, value := range taskMap.Data {
-		allTasks[key] = taskCompletionInfo{
-			Completed: value.Completed,
-			Total:     value.Total,
+		allTasks := make(map[int]taskCompletionInfo)
+		for key, value := range taskMap.Data {
+			allTasks[key] = taskCompletionInfo{
+				Completed: value.Completed,
+				Total:     value.Total,
+			}
 		}
-	}
 
-	return c.JSON(allTasks)
+		return c.JSON(allTasks)
+	}
 }
 
 // GetTaskCompletionInfoForKey extracts the event number from the request URL parameters and retrieves task completion information.
@@ -45,27 +47,29 @@ func GetAllTaskCompletionInfo(c *fiber.Ctx) error {
 // If the event number is invalid, the function returns a 400 Bad Request response.
 // If the event is not found, the function returns a 404 Not Found response.
 // If the event is found, the function returns the task completion information as JSON.
-func GetTaskCompletionInfoForKey(c *fiber.Ctx) error {
-	key, err := c.ParamsInt("event_number")
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid task key",
+func GetTaskCompletionInfoForKey(cm *broadcast.ConnectionManager) func(c *fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		key, err := c.ParamsInt("event_number")
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid task key",
+			})
+		}
+
+		taskMap := database.GetTaskCompletionMapInstance(nil, cm)
+
+		if value, ok := taskMap.Data[key]; ok {
+			taskInfo := taskCompletionInfo{
+				Completed: value.Completed,
+				Total:     value.Total,
+			}
+			return c.JSON(taskInfo)
+		}
+
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Event not found",
 		})
 	}
-
-	taskMap := database.GetTaskCompletionMapInstance(nil)
-
-	if value, ok := taskMap.Data[key]; ok {
-		taskInfo := taskCompletionInfo{
-			Completed: value.Completed,
-			Total:     value.Total,
-		}
-		return c.JSON(taskInfo)
-	}
-
-	return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-		"error": "Event not found",
-	})
 }
 
 //endregion
@@ -145,7 +149,7 @@ func GetAllEscalationLevels(c *fiber.Ctx) error {
 // PostEscalate handles HTTP POST requests to escalate an event's level.
 // It reads the request body to get the eventNumber and newLevel, escalates the event level,
 // and updates the overview. It returns a JSON response indicating success or any error.
-func PostEscalate(repos *database.Repositories, confg config.Config) func(c *fiber.Ctx) error {
+func PostEscalate(repos *database.Repositories, confg config.Config, cm *broadcast.ConnectionManager) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		// Parse request body
 		var request EscalateRequest
@@ -255,7 +259,7 @@ func PostEscalate(repos *database.Repositories, confg config.Config) func(c *fib
 		}
 
 		// Keep in memory completion metrics cache in sync
-		taskCompletionInstance := database.GetTaskCompletionMapInstance(nil)
+		taskCompletionInstance := database.GetTaskCompletionMapInstance(nil, cm)
 		taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(tasksToUse))
 
 		// build a map for realtime update
