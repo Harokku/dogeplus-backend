@@ -136,6 +136,16 @@ func (cm *ConnectionManager) BroadcastToTopic(topic string, message []byte) {
 
 // heartbeatLoop sends periodic heartbeats to all clients
 func (cm *ConnectionManager) heartbeatLoop() {
+	// Recover from panics to prevent the goroutine from crashing the application
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("Recovered from panic in heartbeatLoop: %v", r)
+			// Restart the goroutine after a short delay
+			time.Sleep(time.Second)
+			go cm.heartbeatLoop()
+		}
+	}()
+
 	ticker := time.NewTicker(cm.heartbeatTick)
 	defer ticker.Stop()
 
@@ -171,6 +181,16 @@ func (cm *ConnectionManager) sendHeartbeats() {
 
 // monitorConnections periodically checks for stale connections
 func (cm *ConnectionManager) monitorConnections() {
+	// Recover from panics to prevent the goroutine from crashing the application
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("Recovered from panic in monitorConnections: %v", r)
+			// Restart the goroutine after a short delay
+			time.Sleep(time.Second)
+			go cm.monitorConnections()
+		}
+	}()
+
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -194,7 +214,10 @@ func (cm *ConnectionManager) cleanStaleConnections() {
 	for id, client := range cm.Clients {
 		if client.LastActivity().Before(staleThreshold) {
 			log.Infof("Removing stale connection for client %s", id)
-			_ = client.Disconnect()
+			if err := client.Disconnect(); err != nil {
+				log.Warnf("Error disconnecting stale client %s: %v", id, err)
+				// Continue with removal despite the error
+			}
 			delete(cm.Clients, id)
 		}
 	}
@@ -208,8 +231,11 @@ func (cm *ConnectionManager) Shutdown() {
 	defer cm.lock.Unlock()
 
 	// Disconnect all clients
-	for _, client := range cm.Clients {
-		_ = client.Disconnect()
+	for id, client := range cm.Clients {
+		if err := client.Disconnect(); err != nil {
+			log.Warnf("Error disconnecting client %s during shutdown: %v", id, err)
+			// Continue with shutdown despite errors
+		}
 	}
 
 	// Clear the clients map

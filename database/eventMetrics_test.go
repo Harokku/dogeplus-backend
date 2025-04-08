@@ -357,7 +357,7 @@ func TestGetTaskCompletionMapInstance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			taskCompletionOnce = sync.Once{}
-			got := GetTaskCompletionMapInstance(tt.events)
+			got := GetTaskCompletionMapInstance(tt.events, nil)
 			if !reflect.DeepEqual(got.Data, tt.want) {
 				t.Errorf("GetTaskCompletionMapInstance() = %v, want %v", got.Data, tt.want)
 			}

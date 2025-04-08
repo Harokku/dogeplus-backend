@@ -95,6 +95,9 @@ func (s *Service) UpdateConnection(conn *websocket.Conn) {
 	defer s.mu.Unlock()
 
 	if s.Conn != nil {
+		// Close the existing connection before replacing it
+		// Errors during close are intentionally ignored as they don't affect the new connection
+		// and the old connection will be garbage collected anyway
 		_ = s.Conn.Close()
 	}
 

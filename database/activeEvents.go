@@ -354,18 +354,24 @@ func (e *ActiveEventsRepository) GetAggregatedEventStatus() ([]AggregatedActiveE
 // Otherwise, the transaction is committed and the updated active event record is returned.
 // It returns an error if the database transaction fails to begin, the UPDATE query fails,
 // the row fetch fails, or the transaction fails to commit.
-func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, modifiedBy string, ipAddress string) (ActiveEvents, error) {
+func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, modifiedBy string, ipAddress string) (event ActiveEvents, err error) {
 	// Begin a transaction
 	tx, err := e.db.Begin()
 	if err != nil {
-		return ActiveEvents{}, err
+		return ActiveEvents{}, fmt.Errorf("failed to begin transaction: %w", err)
 	}
+
+	// Ensure the transaction will be closed before returning
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
 	// Update the status
 	_, err = tx.Exec("UPDATE active_events SET status = ?, modified_by = ?, ip_address=?, timestamp=? WHERE uuid = ?", status, modifiedBy, ipAddress, time.Now(), uuid)
 	if err != nil {
-		tx.Rollback()
-		return ActiveEvents{}, err
+		return ActiveEvents{}, fmt.Errorf("failed to update status: %w", err)
 	}
 
 	// Fetch the updated row
@@ -374,28 +380,27 @@ func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, mod
 	var tmpEventDate string // event date as string to be scanned to before parsing
 	var tmpTimestamp string // timestamp as string to be scanned to before parsing
 	layout := "2006-01-02 15:04:05.999999-07:00"
-	var event ActiveEvents
+
 	err = row.Scan(&event.UUID, &event.EventNumber, &tmpEventDate, &event.CentralID, &event.Priority, &event.Title,
 		&event.Description, &event.Role, &event.Status, &event.ModifiedBy, &event.IpAddress, &tmpTimestamp, &event.EscalationLevel)
 	if err != nil {
-		tx.Rollback()
-		return ActiveEvents{}, err
+		return ActiveEvents{}, fmt.Errorf("failed to scan updated row: %w", err)
 	}
 
 	// Commit the transaction
 	err = tx.Commit()
 	if err != nil {
-		return ActiveEvents{}, err
+		return ActiveEvents{}, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	// parse time to actual type
 	parsedEventDate, err := time.Parse(layout, tmpEventDate)
 	if err != nil {
-		return ActiveEvents{}, err
+		return ActiveEvents{}, fmt.Errorf("failed to parse event date: %w", err)
 	}
 	parsedTimestamp, err := time.Parse(layout, tmpTimestamp)
 	if err != nil {
-		return ActiveEvents{}, err
+		return ActiveEvents{}, fmt.Errorf("failed to parse timestamp: %w", err)
 	}
 	event.EventDate = parsedEventDate
 	event.Timestamp = parsedTimestamp
@@ -416,12 +421,13 @@ func (e *ActiveEventsRepository) UpdateStatus(uuid uuid.UUID, status string, mod
 func (e *ActiveEventsRepository) DeleteEvent(eventNumber int, centralId string) error {
 	stmt, err := e.db.Prepare("DELETE FROM active_events where central_id = ? AND event_number = ?")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to prepare delete statement: %w", err)
 	}
+	defer stmt.Close() // Ensure statement is closed to prevent resource leaks
 
 	_, err = stmt.Exec(centralId, eventNumber)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to execute delete statement: %w", err)
 	}
 
 	// Get singleton instance of TaskCompletionMap to update aggregation
