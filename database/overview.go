@@ -108,11 +108,11 @@ func (ov *OverviewRepository) GetOverviewByCentralId(centralId string) ([]Overvi
 	return overviews, nil
 }
 
-// UpdateLevelByEventNumber updates the Level column of a specified EventNumber with the passed-in value.
-func (ov *OverviewRepository) UpdateLevelByEventNumber(eventNumber int, newLevel Level) error {
-	query := `UPDATE overview SET level = ? WHERE event_number = ?`
+// UpdateLevelByEventNumber updates the level and incident level of an overview record based on the provided event number.
+func (ov *OverviewRepository) UpdateLevelByEventNumber(eventNumber int, newLevel Level, incidentLevel string) error {
+	query := `UPDATE overview SET level = ?, incident_level = ? WHERE event_number = ?`
 
-	_, err := ov.db.Exec(query, newLevel, eventNumber)
+	_, err := ov.db.Exec(query, newLevel, incidentLevel, eventNumber)
 	if err != nil {
 		return err
 	}

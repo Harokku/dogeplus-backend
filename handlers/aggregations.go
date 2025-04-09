@@ -175,7 +175,7 @@ func PostEscalate(repos *database.Repositories, confg config.Config, cm *broadca
 		}
 
 		// Sync overview with new escalation level
-		err = repos.Overview.UpdateLevelByEventNumber(request.EventNumber, request.NewLevel)
+		err = repos.Overview.UpdateLevelByEventNumber(request.EventNumber, request.NewLevel, request.IncidentLevel)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
@@ -190,9 +190,7 @@ func PostEscalate(repos *database.Repositories, confg config.Config, cm *broadca
 			})
 		}
 
-		// FIXME: Implement correct filtering using db query
 		// Get new level tasks
-		// newTasks, err := repos.Tasks.GetGyCategoryAndEscalationLevel(actualOverview.Type, string(oldLevel), string(request.NewLevel), request.IncidentLevel)
 		newTasks, err := repos.Tasks.GetByCategories(actualOverview.Type)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -262,22 +260,6 @@ func PostEscalate(repos *database.Repositories, confg config.Config, cm *broadca
 		taskCompletionInstance := database.GetTaskCompletionMapInstance(nil, cm)
 		taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(tasksToUse))
 
-		// build a map for realtime update
-		//updatedEscalation := fiber.Map{
-		//	"Result":      "Escalation level updated",
-		//	"EventNumber": request.EventNumber,
-		//	"AddedTasks":  len(newTasks),
-		//}
-		//
-		//// Send broadcast response via connection manager in JSON format
-		//// If error skip broadcast phase
-		//updatedEscalationJson, err := json.Marshal(updatedEscalation)
-		//if err != nil {
-		//	log.Errorf("Failed to marshal updated escalation level to JSON: %v\n", err)
-		//} else {
-		//	cm.Broadcast(updatedEscalationJson)
-		//}
-
 		// Return success response
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"message": "Event level escalated successfully",
@@ -307,7 +289,7 @@ func PostDeEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
 			})
 		}
 		// Sync overview with new escalation level
-		err = repos.Overview.UpdateLevelByEventNumber(request.EventNumber, request.NewLevel)
+		err = repos.Overview.UpdateLevelByEventNumber(request.EventNumber, request.NewLevel, request.IncidentLevel)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
