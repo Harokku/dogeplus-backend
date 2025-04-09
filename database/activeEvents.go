@@ -6,6 +6,7 @@ package database
 
 import (
 	"database/sql"
+	"dogeplus-backend/errors"
 	"fmt"
 	"github.com/google/uuid"
 	"time"
@@ -292,9 +293,11 @@ func (e *ActiveEventsRepository) GetByCentralAndNumber(eventNumber int, centralI
 func (e *ActiveEventsRepository) GetAllEventsStatus() ([]ActiveEvents, error) {
 	rows, err := e.db.Query(`SELECT event_number, status FROM active_events`)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to query all events status")
 	}
-	defer rows.Close()
+	defer func() {
+		errors.HandleCloser(rows.Close(), "error closing rows in GetAllEventsStatus")
+	}()
 
 	var events []ActiveEvents
 
@@ -302,9 +305,14 @@ func (e *ActiveEventsRepository) GetAllEventsStatus() ([]ActiveEvents, error) {
 	for rows.Next() {
 		var event ActiveEvents
 		if err := rows.Scan(&event.EventNumber, &event.Status); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to scan event status row")
 		}
 		events = append(events, event)
+	}
+
+	// Check for errors from iteration
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error during row iteration")
 	}
 
 	return events, nil
@@ -325,10 +333,12 @@ func (e *ActiveEventsRepository) GetAggregatedEventStatus() ([]AggregatedActiveE
 								GROUP BY
     								event_number`)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to query aggregated event status")
 	}
 
-	defer rows.Close()
+	defer func() {
+		errors.HandleCloser(rows.Close(), "error closing rows in GetAggregatedEventStatus")
+	}()
 
 	var events []AggregatedActiveEvents
 
@@ -336,9 +346,14 @@ func (e *ActiveEventsRepository) GetAggregatedEventStatus() ([]AggregatedActiveE
 	for rows.Next() {
 		var event AggregatedActiveEvents
 		if err := rows.Scan(&event.EventNumber, &event.Done, &event.Total); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to scan aggregated event row")
 		}
 		events = append(events, event)
+	}
+
+	// Check for errors from iteration
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error during row iteration")
 	}
 
 	return events, nil
@@ -443,19 +458,26 @@ func (e *ActiveEventsRepository) DeleteEvent(eventNumber int, centralId string) 
 func (e *ActiveEventsRepository) GetRawEscalationLevels() ([]ActiveEvents, error) {
 	rows, err := e.db.Query(`SELECT DISTINCT event_number, escalation_level FROM active_events`)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to query raw escalation levels")
 	}
 
-	defer rows.Close()
+	defer func() {
+		errors.HandleCloser(rows.Close(), "error closing rows in GetRawEscalationLevels")
+	}()
 
 	var events []ActiveEvents
 
 	for rows.Next() {
 		var event ActiveEvents
 		if err := rows.Scan(&event.EventNumber, &event.EscalationLevel); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to scan escalation level row")
 		}
 		events = append(events, event)
+	}
+
+	// Check for errors from iteration
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error during row iteration")
 	}
 
 	return events, nil

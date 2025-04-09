@@ -6,6 +6,7 @@ package database
 
 import (
 	"database/sql"
+	"dogeplus-backend/errors"
 	"github.com/google/uuid"
 )
 
@@ -40,8 +41,11 @@ func (ov *OverviewRepository) Add(overview *Overview) error {
 	overview.UUID = newUUID
 
 	_, err := ov.db.Exec(query, newUUID, overview.CentralId, overview.EventNumber, overview.Location, overview.LocationDetail, overview.Type, overview.Level, overview.IncidentLevel)
+	if err != nil {
+		return errors.Wrap(err, "failed to add overview")
+	}
 
-	return err
+	return nil
 }
 
 // GetAllOverview retrieves all overview records from the database and returns a slice of Overview or an error if it fails.
@@ -50,9 +54,11 @@ func (ov *OverviewRepository) GetAllOverview() ([]Overview, error) {
 
 	rows, err := ov.db.Query(query)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to query overviews")
 	}
-	defer rows.Close()
+	defer func() {
+		errors.HandleCloser(rows.Close(), "error closing rows in GetAllOverview")
+	}()
 
 	var overviews []Overview
 
@@ -60,9 +66,14 @@ func (ov *OverviewRepository) GetAllOverview() ([]Overview, error) {
 	for rows.Next() {
 		var overview Overview
 		if err := rows.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level, &overview.IncidentLevel); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to scan overview row")
 		}
 		overviews = append(overviews, overview)
+	}
+
+	// Check for errors from iteration
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error during row iteration")
 	}
 
 	return overviews, nil
@@ -78,7 +89,7 @@ func (ov *OverviewRepository) GetOverviewById(eventId int) (Overview, error) {
 
 	// Scan row to return variable
 	if err := row.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level, &overview.IncidentLevel); err != nil {
-		return overview, err
+		return overview, errors.Wrap(err, "failed to scan overview row by ID")
 	}
 
 	return overview, nil
@@ -90,9 +101,11 @@ func (ov *OverviewRepository) GetOverviewByCentralId(centralId string) ([]Overvi
 
 	rows, err := ov.db.Query(query, centralId)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to query overviews by central ID")
 	}
-	defer rows.Close()
+	defer func() {
+		errors.HandleCloser(rows.Close(), "error closing rows in GetOverviewByCentralId")
+	}()
 
 	var overviews []Overview
 
@@ -100,9 +113,14 @@ func (ov *OverviewRepository) GetOverviewByCentralId(centralId string) ([]Overvi
 	for rows.Next() {
 		var overview Overview
 		if err := rows.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level, &overview.IncidentLevel); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to scan overview row")
 		}
 		overviews = append(overviews, overview)
+	}
+
+	// Check for errors from iteration
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error during row iteration")
 	}
 
 	return overviews, nil
@@ -114,7 +132,7 @@ func (ov *OverviewRepository) UpdateLevelByEventNumber(eventNumber int, newLevel
 
 	_, err := ov.db.Exec(query, newLevel, incidentLevel, eventNumber)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to update level by event number")
 	}
 
 	return nil
@@ -126,9 +144,11 @@ func (ov *OverviewRepository) GetOverviewByCentralIdAndEventNumber(centralId str
 
 	rows, err := ov.db.Query(query, centralId, eventNumber)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to query overviews by central ID and event number")
 	}
-	defer rows.Close()
+	defer func() {
+		errors.HandleCloser(rows.Close(), "error closing rows in GetOverviewByCentralIdAndEventNumber")
+	}()
 
 	var overviews []Overview
 
@@ -136,9 +156,14 @@ func (ov *OverviewRepository) GetOverviewByCentralIdAndEventNumber(centralId str
 	for rows.Next() {
 		var overview Overview
 		if err := rows.Scan(&overview.UUID, &overview.CentralId, &overview.EventNumber, &overview.Location, &overview.LocationDetail, &overview.Type, &overview.Level, &overview.IncidentLevel); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to scan overview row")
 		}
 		overviews = append(overviews, overview)
+	}
+
+	// Check for errors from iteration
+	if err := rows.Err(); err != nil {
+		return nil, errors.Wrap(err, "error during row iteration")
 	}
 
 	return overviews, nil
