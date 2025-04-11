@@ -29,55 +29,149 @@ func TestMergeTasks(t *testing.T) {
 		{
 			name: "No Update, Original Unchanged",
 			original: []Task{
-				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
-				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "el2", IncidentLevel: "il2"},
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: "bianca"},
+				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: "verde"},
 			},
 			update: []Task{},
 			want: []Task{
-				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
-				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "el2", IncidentLevel: "il2"},
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: "bianca"},
+				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: "verde"},
 			},
 		},
 		{
 			name: "Update with new tasks",
 			original: []Task{
-				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
-				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "el2", IncidentLevel: "il2"},
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: "bianca"},
+				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: "verde"},
 			},
 			update: []Task{
-				{ID: 3, Title: "title3", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "el3", IncidentLevel: "il3"},
+				{ID: 3, Title: "title3", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "incidente", IncidentLevel: "gialla"},
 			},
 			want: []Task{
-				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
-				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "el2", IncidentLevel: "il2"},
-				{ID: 3, Title: "title3", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "el3", IncidentLevel: "il3"},
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: "bianca"},
+				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: "verde"},
+				{ID: 3, Title: "title3", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "incidente", IncidentLevel: "gialla"},
 			},
 		},
 		{
 			name: "Update Existing Task",
 			original: []Task{
-				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
-				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "el2", IncidentLevel: "il2"},
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: "bianca"},
+				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: "verde"},
 			},
 			update: []Task{
-				{ID: 2, Title: "title2", Category: "category2", Priority: 3, Description: "DescUpdated", Role: "RoleUpdated", EscalationLevel: "elUpdated", IncidentLevel: "ilUpdated"},
+				{ID: 2, Title: "title2", Category: "category2", Priority: 3, Description: "DescUpdated", Role: "RoleUpdated", EscalationLevel: "incidente", IncidentLevel: "gialla"},
 			},
 			want: []Task{
-				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
-				{ID: 2, Title: "title2", Category: "category2", Priority: 3, Description: "DescUpdated", Role: "RoleUpdated", EscalationLevel: "elUpdated", IncidentLevel: "ilUpdated"},
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: "bianca"},
+				{ID: 2, Title: "title2", Category: "category2", Priority: 3, Description: "DescUpdated", Role: "RoleUpdated", EscalationLevel: "incidente", IncidentLevel: "gialla"},
 			},
 		},
 		{
 			name: "Update Causes Task Deletion",
 			original: []Task{
-				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
-				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "el2", IncidentLevel: "il2"},
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: "bianca"},
+				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: "verde"},
 			},
 			update: []Task{
 				{ID: 2, Title: "title2", Category: "", Priority: 0, Description: "", Role: "", EscalationLevel: "", IncidentLevel: ""},
 			},
 			want: []Task{
-				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "el1", IncidentLevel: "il1"},
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: "bianca"},
+			},
+		},
+		// Rule 1: Multiple tasks with same title in original slice - keep only the one with higher escalation level
+		{
+			name: "Rule 1: Keep Task with Higher Escalation Level",
+			original: []Task{
+				{ID: 1, Title: "sameTitle", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "sameTitle", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "uniqueTitle", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "allarme", IncidentLevel: ""},
+			},
+			update: []Task{},
+			want: []Task{
+				{ID: 2, Title: "sameTitle", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "uniqueTitle", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "allarme", IncidentLevel: ""},
+			},
+		},
+		// Rule 1 (edge case): Multiple tasks with same title and "incidente" escalation level - keep only the one with higher incident level
+		{
+			name: "Rule 1 Edge Case: Keep Task with Higher Incident Level",
+			original: []Task{
+				{ID: 1, Title: "sameTitle", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 2, Title: "sameTitle", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "incidente", IncidentLevel: "verde"},
+				{ID: 3, Title: "uniqueTitle", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "incidente", IncidentLevel: "gialla"},
+			},
+			update: []Task{},
+			want: []Task{
+				{ID: 2, Title: "sameTitle", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "incidente", IncidentLevel: "verde"},
+				{ID: 3, Title: "uniqueTitle", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "incidente", IncidentLevel: "gialla"},
+			},
+		},
+		// Rule 3 (edge case): Multiple tasks with same title in update slice - apply Rule 1 before appending
+		{
+			name: "Rule 3 Edge Case: Filter Update Tasks Before Appending",
+			original: []Task{
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: ""},
+			},
+			update: []Task{
+				{ID: 2, Title: "newTitle", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 3, Title: "newTitle", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "emergenza", IncidentLevel: ""},
+			},
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 3, Title: "newTitle", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "emergenza", IncidentLevel: ""},
+			},
+		},
+		// Complex scenario: Combining multiple rules
+		{
+			name: "Complex Scenario: Combining Multiple Rules",
+			original: []Task{
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "title1", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "title2", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+			},
+			update: []Task{
+				{ID: 4, Title: "title1", Category: "category4", Priority: 4, Description: "Desc4", Role: "Role4", EscalationLevel: "incidente", IncidentLevel: "verde"},
+				{ID: 5, Title: "title2", Category: "category5", Priority: 5, Description: "Desc5", Role: "Role5", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 6, Title: "title3", Category: "category6", Priority: 6, Description: "Desc6", Role: "Role6", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 7, Title: "title3", Category: "category7", Priority: 7, Description: "Desc7", Role: "Role7", EscalationLevel: "emergenza", IncidentLevel: ""},
+			},
+			want: []Task{
+				{ID: 4, Title: "title1", Category: "category4", Priority: 4, Description: "Desc4", Role: "Role4", EscalationLevel: "incidente", IncidentLevel: "verde"},
+				{ID: 5, Title: "title2", Category: "category5", Priority: 5, Description: "Desc5", Role: "Role5", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 7, Title: "title3", Category: "category7", Priority: 7, Description: "Desc7", Role: "Role7", EscalationLevel: "emergenza", IncidentLevel: ""},
+			},
+		},
+		// Rule 3 (edge case): Multiple tasks with same title and "incidente" escalation level in update slice
+		{
+			name: "Rule 3 Edge Case: Incident Level Comparison in Update Slice",
+			original: []Task{
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: ""},
+			},
+			update: []Task{
+				{ID: 2, Title: "title2", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "incidente", IncidentLevel: "bianca"},
+				{ID: 3, Title: "title2", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "incidente", IncidentLevel: "verde"},
+				{ID: 4, Title: "title2", Category: "category4", Priority: 4, Description: "Desc4", Role: "Role4", EscalationLevel: "incidente", IncidentLevel: "gialla"},
+			},
+			want: []Task{
+				{ID: 1, Title: "title1", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 4, Title: "title2", Category: "category4", Priority: 4, Description: "Desc4", Role: "Role4", EscalationLevel: "incidente", IncidentLevel: "gialla"},
+			},
+		},
+		// Deletion scenario with multiple tasks with the same title in the original slice
+		{
+			name: "Delete Task with Multiple Instances in Original",
+			original: []Task{
+				{ID: 1, Title: "sameTitle", Category: "category1", Priority: 1, Description: "Desc1", Role: "Role1", EscalationLevel: "allarme", IncidentLevel: ""},
+				{ID: 2, Title: "sameTitle", Category: "category2", Priority: 2, Description: "Desc2", Role: "Role2", EscalationLevel: "emergenza", IncidentLevel: ""},
+				{ID: 3, Title: "uniqueTitle", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "allarme", IncidentLevel: ""},
+			},
+			update: []Task{
+				{ID: 4, Title: "sameTitle", Category: "", Priority: 0, Description: "", Role: "", EscalationLevel: "", IncidentLevel: ""},
+			},
+			want: []Task{
+				{ID: 3, Title: "uniqueTitle", Category: "category3", Priority: 3, Description: "Desc3", Role: "Role3", EscalationLevel: "allarme", IncidentLevel: ""},
 			},
 		},
 	}
@@ -93,9 +187,25 @@ func TestMergeTasks(t *testing.T) {
 				t.Errorf("MergeTasks() length got = %v, want = %v", len(got), len(tt.want))
 				return
 			}
-			for i, task := range got {
-				if task != tt.want[i] {
-					t.Errorf("MergeTasks() task %d got = %v, want = %v", i, task, tt.want[i])
+
+			// Create maps to check for task presence regardless of order
+			gotMap := make(map[string]Task)
+			wantMap := make(map[string]Task)
+
+			for _, task := range got {
+				gotMap[task.Title] = task
+			}
+
+			for _, task := range tt.want {
+				wantMap[task.Title] = task
+			}
+
+			// Check that each expected task is in the result
+			for title, wantTask := range wantMap {
+				if gotTask, ok := gotMap[title]; !ok {
+					t.Errorf("MergeTasks() missing expected task with title %s", title)
+				} else if gotTask != wantTask {
+					t.Errorf("MergeTasks() task with title %s got = %v, want = %v", title, gotTask, wantTask)
 				}
 			}
 		})

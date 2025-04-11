@@ -548,8 +548,13 @@ func FilterTasksForEscalation(tasks []Task, category, startingEscalation, finalE
 	return filteredTasks, nil
 }
 
-// MergeTasks merges two slices of Tasks by updating or removing existing tasks and adding new ones based on their Title and Category.
-// If a task in the update slice has only Title and Category populated, it will remove the corresponding task from the original slice.
+// MergeTasks merges two slices of Tasks by updating or removing existing tasks and adding new ones based on their Title.
+// It applies the following rules:
+//  1. If multiple tasks with the same title exist in original slice: keep only the one with higher Escalation level,
+//     also check for the same task if escalationLevel is "incidente" keep only the one with higher incidentLevel.
+//  2. If task exists in both original and update with the same title: update the original task with update data.
+//  3. If task exists only in update slice append it to the original, follow same rules as 1 if multiple tasks
+//     with same title exist in update slice (for escalationLevel and incidentLevel).
 func MergeTasks(original, update []Task) ([]Task, error) {
 	// Helper function to check if a Task in the update slice has only Title populated.
 	isOnlyTitleAndCategoryPopulated := func(task Task) bool {
@@ -561,35 +566,101 @@ func MergeTasks(original, update []Task) ([]Task, error) {
 			task.IncidentLevel == ""
 	}
 
-	// Create a map to store the index of each original task keyed by "Title|Category".
-	// This allows for O(1) lookups to check if a task exists and to find its index quickly.
-	originalTaskMap := make(map[string]int)
-	for i, task := range original {
-		key := task.Title
-		originalTaskMap[key] = i
+	// Helper function to compare tasks and return the one with higher escalation level
+	// If both have the same escalation level "incidente", return the one with higher incident level
+	compareTaskLevels := func(task1, task2 Task) Task {
+		// Get escalation levels for comparison
+		esc1 := strings.ToLower(task1.EscalationLevel)
+		esc2 := strings.ToLower(task2.EscalationLevel)
+
+		// If escalation levels are different, return the task with higher level
+		if esc1 != esc2 {
+			if escalationLevels[esc1] > escalationLevels[esc2] {
+				return task1
+			}
+			return task2
+		}
+
+		// If both have escalation level "incidente", compare incident levels
+		if esc1 == "incidente" && esc2 == "incidente" {
+			inc1 := strings.ToLower(task1.IncidentLevel)
+			inc2 := strings.ToLower(task2.IncidentLevel)
+
+			if incidentLevels[inc1] > incidentLevels[inc2] {
+				return task1
+			}
+			return task2
+		}
+
+		// If escalation levels are the same but not "incidente", return either one (task1 in this case)
+		return task1
 	}
 
-	// Iterate over each Task in the update slice
-	for _, updatedTask := range update {
-		// Generate a key using "Title|Category"
+	// Rule 1: Process original slice to keep only tasks with highest escalation/incident level for each title
+	originalByTitle := make(map[string]Task)
+	for _, task := range original {
+		title := task.Title
+		if existingTask, exists := originalByTitle[title]; exists {
+			// Compare and keep the task with higher level
+			originalByTitle[title] = compareTaskLevels(existingTask, task)
+		} else {
+			originalByTitle[title] = task
+		}
+	}
+
+	// Rule 3: Process update slice to keep only tasks with highest escalation/incident level for each title
+	updateByTitle := make(map[string]Task)
+	for _, task := range update {
+		// Skip tasks that only have title populated (used for deletion)
+		if !isOnlyTitleAndCategoryPopulated(task) {
+			title := task.Title
+			if existingTask, exists := updateByTitle[title]; exists {
+				// Compare and keep the task with higher level
+				updateByTitle[title] = compareTaskLevels(existingTask, task)
+			} else {
+				updateByTitle[title] = task
+			}
+		} else {
+			// For deletion tasks, always keep them
+			updateByTitle[task.Title] = task
+		}
+	}
+
+	// Convert the filtered original tasks back to a slice
+	var filteredOriginal []Task
+	for _, task := range originalByTitle {
+		filteredOriginal = append(filteredOriginal, task)
+	}
+
+	// Rule 2: Merge update tasks into original
+	// Create a map for O(1) lookups of filtered original tasks
+	originalTaskMap := make(map[string]int)
+	for i, task := range filteredOriginal {
+		originalTaskMap[task.Title] = i
+	}
+
+	// Process the filtered update tasks
+	for _, updatedTask := range updateByTitle {
 		key := updatedTask.Title
 		if idx, exists := originalTaskMap[key]; exists {
 			// If the task exists in the original slice
 			if isOnlyTitleAndCategoryPopulated(updatedTask) {
 				// If only Title and Category are populated in the updated Task, delete the task from original
-				original = append(original[:idx], original[idx+1:]...)
+				filteredOriginal = append(filteredOriginal[:idx], filteredOriginal[idx+1:]...)
 				delete(originalTaskMap, key) // Also remove it from the map
 			} else {
 				// If other fields are populated, update the task in the original slice
-				original[idx] = updatedTask
+				filteredOriginal[idx] = updatedTask
 			}
 		} else {
 			// If the task does not exist in the original slice, append it to original
-			original = append(original, updatedTask)
+			if !isOnlyTitleAndCategoryPopulated(updatedTask) {
+				filteredOriginal = append(filteredOriginal, updatedTask)
+			}
 		}
 	}
 
-	return original, nil
+	return filteredOriginal, nil
 }
 
 // MergeTasksFixCategory merges two slices of Tasks by updating or removing existing tasks and adding new ones based on their Title and Category.
