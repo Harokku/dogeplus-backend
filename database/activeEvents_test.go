@@ -226,7 +226,81 @@ func TestActiveEventsRepository_UpdateStatus(t *testing.T) {
 	assert.Equal(t, ipAddress, updatedEvent.IpAddress)
 }
 
-// TestActiveEventsRepository_DeleteEvent tests the DeleteEvent method
+// TestActiveEventsRepository_FilterAndUpdateExistingTasks tests the FilterAndUpdateExistingTasks method
+func TestActiveEventsRepository_FilterAndUpdateExistingTasks(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	repo := NewActiveEventRepository(db)
+	eventNumber := 1
+	centralID := "test-central"
+
+	// Create test tasks
+	tasks := []Task{
+		{
+			ID:          1,
+			Priority:    1,
+			Title:       "Task 1",
+			Description: "Description 1",
+			Role:        "Role 1",
+		},
+		{
+			ID:          2,
+			Priority:    2,
+			Title:       "Task 2",
+			Description: "Description 2",
+			Role:        "Role 2",
+		},
+		{
+			ID:          3,
+			Priority:    3,
+			Title:       "Task 3",
+			Description: "Description 3",
+			Role:        "Role 3",
+		},
+	}
+
+	// Test scenario 1: No existing events (all tasks should be returned)
+	filteredTasks, err := repo.FilterAndUpdateExistingTasks(tasks, eventNumber, centralID)
+	require.NoError(t, err)
+	assert.Equal(t, 3, len(filteredTasks), "All tasks should be returned when no existing events")
+
+	// Add some events to the database
+	tx, err := db.Begin()
+	require.NoError(t, err)
+
+	// Add Task 1 with status "done"
+	event1 := repo.TaskToActiveEvent(tasks[0], eventNumber, centralID)
+	event1.Status = TaskDone
+	err = repo.Add(tx, event1)
+	require.NoError(t, err)
+
+	// Add Task 2 with status "notdone"
+	event2 := repo.TaskToActiveEvent(tasks[1], eventNumber, centralID)
+	event2.Status = TaskNotdone
+	err = repo.Add(tx, event2)
+	require.NoError(t, err)
+
+	err = tx.Commit()
+	require.NoError(t, err)
+
+	// Test scenario 2 & 3: Existing events with different statuses
+	filteredTasks, err = repo.FilterAndUpdateExistingTasks(tasks, eventNumber, centralID)
+	require.NoError(t, err)
+
+	// Only Task 3 should be in the filtered list (Task 1 is done, Task 2 is notdone but updated)
+	assert.Equal(t, 1, len(filteredTasks), "Only tasks that don't exist should be returned")
+	assert.Equal(t, "Task 3", filteredTasks[0].Title, "Task 3 should be in the filtered list")
+
+	// Verify Task 2 was updated in the database
+	var priority int
+	var description string
+	err = db.QueryRow("SELECT priority, description FROM active_events WHERE title = ?", "Task 2").Scan(&priority, &description)
+	require.NoError(t, err)
+	assert.Equal(t, 2, priority, "Priority should be updated")
+	assert.Equal(t, "Description 2", description, "Description should be updated")
+}
+
 func TestActiveEventsRepository_DeleteEvent(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()

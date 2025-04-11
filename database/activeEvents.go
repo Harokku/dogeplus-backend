@@ -453,6 +453,76 @@ func (e *ActiveEventsRepository) DeleteEvent(eventNumber int, centralId string) 
 	return nil
 }
 
+// FilterAndUpdateExistingTasks filters out tasks that already exist in the active_events table.
+// It takes a list of tasks, an event number, and a central ID.
+// For each task in the list:
+// 1. If it exists in the database with status != "notdone", it is removed from the list
+// 2. If it exists in the database with status = "notdone", the database record is updated with data from the task and the task is removed from the list
+// It returns the filtered list of tasks that need to be added as new records.
+func (e *ActiveEventsRepository) FilterAndUpdateExistingTasks(tasks []Task, eventNumber int, centralId string) ([]Task, error) {
+	// Get existing active events for this event number and central ID
+	existingEvents, err := e.GetByCentralAndNumber(eventNumber, centralId)
+	if err != nil {
+		// If no events found, return all tasks as they need to be added
+		if _, ok := err.(*NoEventsFoundError); ok {
+			return tasks, nil
+		}
+		return nil, fmt.Errorf("failed to get existing events: %w", err)
+	}
+
+	// Create a map of existing events by title for quick lookup
+	existingEventsByTitle := make(map[string]ActiveEvents)
+	for _, event := range existingEvents {
+		existingEventsByTitle[event.Title] = event
+	}
+
+	// Filter tasks and update existing events
+	var filteredTasks []Task
+	for _, task := range tasks {
+		// Check if task already exists
+		if existingEvent, exists := existingEventsByTitle[task.Title]; exists {
+			// If status is "notdone", update the existing event
+			if existingEvent.Status == TaskNotdone {
+				// Convert task to ActiveEvents to get all fields
+				updatedEvent := e.TaskToActiveEvent(task, eventNumber, centralId)
+
+				// Keep the UUID and other fields from the existing event
+				updatedEvent.UUID = existingEvent.UUID
+				updatedEvent.Status = TaskNotdone
+				updatedEvent.ModifiedBy = existingEvent.ModifiedBy
+				updatedEvent.IpAddress = existingEvent.IpAddress
+
+				// Update the existing event in the database
+				_, err := e.db.Exec(`UPDATE active_events SET 
+					priority = ?, 
+					title = ?, 
+					description = ?, 
+					role = ?, 
+					escalation_level = ?, 
+					timestamp = ? 
+					WHERE uuid = ?`,
+					updatedEvent.Priority,
+					updatedEvent.Title,
+					updatedEvent.Description,
+					updatedEvent.Role,
+					updatedEvent.EscalationLevel,
+					time.Now(),
+					updatedEvent.UUID)
+
+				if err != nil {
+					return nil, fmt.Errorf("failed to update existing event: %w", err)
+				}
+			}
+			// Skip this task as it already exists (either updated or status != "notdone")
+		} else {
+			// Task doesn't exist, add it to the filtered list
+			filteredTasks = append(filteredTasks, task)
+		}
+	}
+
+	return filteredTasks, nil
+}
+
 // GetRawEscalationLevels retrieves distinct event numbers and their associated escalation levels from the active_events table.
 // It returns a slice of ActiveEvents and an error if any occurs during the database query or scanning process.
 func (e *ActiveEventsRepository) GetRawEscalationLevels() ([]ActiveEvents, error) {

@@ -248,17 +248,29 @@ func PostEscalate(repos *database.Repositories, confg config.Config, cm *broadca
 			})
 		}
 
-		// Add new tasks to active events
-		err = repos.ActiveEvents.CreateFromTaskList(tasksToUse, actualOverview.EventNumber, actualOverview.CentralId)
+		// Filter out tasks that already exist in the active_events table
+		// 1. If a task exists with status != "notdone", it is removed from the list
+		// 2. If a task exists with status = "notdone", the database record is updated and the task is removed from the list
+		filteredTasks, err := repos.ActiveEvents.FilterAndUpdateExistingTasks(tasksToUse, actualOverview.EventNumber, actualOverview.CentralId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 
-		// Keep in memory completion metrics cache in sync
-		taskCompletionInstance := database.GetTaskCompletionMapInstance(nil, cm)
-		taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(tasksToUse))
+		// Add new tasks to active events (only those that don't already exist)
+		if len(filteredTasks) > 0 {
+			err = repos.ActiveEvents.CreateFromTaskList(filteredTasks, actualOverview.EventNumber, actualOverview.CentralId)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": err.Error(),
+				})
+			}
+
+			// Keep in memory completion metrics cache in sync (only for newly added tasks)
+			taskCompletionInstance := database.GetTaskCompletionMapInstance(nil, cm)
+			taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(filteredTasks))
+		}
 
 		// Return success response
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
