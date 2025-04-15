@@ -55,7 +55,7 @@ func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositor
 	aggregationEscalation.Get("/details/:central_id", handlers.GetEscalationDetailsByCentralId(repos))
 	aggregationEscalation.Get("/details/:central_id/:event_number", handlers.GetEscalationDetailsByCentralIdAndEventNumber(repos))
 	aggregationEscalation.Post("/escalate", handlers.PostEscalate(repos, config, cm))
-	aggregationEscalation.Post("/deescalate", handlers.PostDeEscalate(repos))
+	aggregationEscalation.Post("/deescalate", handlers.PostDeEscalate(repos, config, cm))
 
 	// Escalation Levels Definitions
 	escalationLevels := v1.Group("/escalation_levels")

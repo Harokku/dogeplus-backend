@@ -280,7 +280,8 @@ func PostEscalate(repos *database.Repositories, confg config.Config, cm *broadca
 }
 
 // PostDeEscalate handles de-escalation of an event level based on the provided request data and updates the escalation map.
-func PostDeEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
+// It is the reverse operation of PostEscalate, undoing all the actions performed during escalation.
+func PostDeEscalate(repos *database.Repositories, confg config.Config, cm *broadcast.ConnectionManager) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		// Parse request body
 		var request EscalateRequest
@@ -293,13 +294,18 @@ func PostDeEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
 		// Get escalation map instance
 		escalationLevels := database.GetEscalationLevelsInstance(nil)
 
-		// Call the Escalate method
+		// Get actual escalation levels
+		actualLevels := escalationLevels.GetLevels()
+		oldLevel := actualLevels[request.EventNumber]
+
+		// Call the Deescalate method
 		err := escalationLevels.Deescalate(request.EventNumber, request.NewLevel)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+
 		// Sync overview with new escalation level
 		err = repos.Overview.UpdateLevelByEventNumber(request.EventNumber, request.NewLevel, request.IncidentLevel)
 		if err != nil {
@@ -308,9 +314,150 @@ func PostDeEscalate(repos *database.Repositories) func(c *fiber.Ctx) error {
 			})
 		}
 
+		// Get actual event overview snapshot
+		actualOverview, err := repos.Overview.GetOverviewById(request.EventNumber)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Get all tasks for the event type
+		allTasks, err := repos.Tasks.GetByCategories(actualOverview.Type)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Filter tasks that were added during escalation (from newLevel to oldLevel)
+		// These are the tasks we want to remove during de-escalation
+		tasksToRemove, err := database.FilterTasksForEscalation(allTasks, actualOverview.Type, string(request.NewLevel), string(oldLevel), request.IncidentLevel)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+
+		// Get local Tasks based on selection
+		var localTasksToRemove []database.Task
+		// Load the correct local task file
+		f, err := config.LoadExcelFile(confg, actualOverview.CentralId)
+		if err == nil {
+			// Parse the file
+			localTasks, err := database.ParseXLSXToTasks(f)
+			if err != nil {
+				log.Errorf("Error parsing local task file: %s\n", err)
+				return fiber.NewError(fiber.StatusInternalServerError, "Failed to parse local task file")
+			}
+
+			// Filter the local file based on request body parameters (reverse direction)
+			filteredLocalTasks, err := database.FilterTasksForEscalation(localTasks, actualOverview.Type, string(request.NewLevel), string(oldLevel), request.IncidentLevel)
+			if err != nil {
+				log.Errorf("Error filtering local tasks for de-escalation: %s\n", err)
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "Failed to filter local tasks for de-escalation",
+				})
+			}
+
+			localTasksToRemove = filteredLocalTasks
+		}
+
+		// Combine tasks to remove
+		var allTasksToRemove []database.Task
+		allTasksToRemove = append(allTasksToRemove, tasksToRemove...)
+		allTasksToRemove = append(allTasksToRemove, localTasksToRemove...)
+
+		// Create a map of task titles to remove for quick lookup
+		taskTitlesToRemove := make(map[string]bool)
+		for _, task := range allTasksToRemove {
+			taskTitlesToRemove[task.Title] = true
+		}
+
+		// Get active events for this event number and central ID
+		activeEvents, err := repos.ActiveEvents.GetByCentralAndNumber(request.EventNumber, actualOverview.CentralId)
+		if err != nil {
+			if _, ok := err.(*database.NoEventsFoundError); !ok {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": err.Error(),
+				})
+			}
+		}
+
+		// Count tasks that will be removed
+		tasksToBeRemoved := 0
+		for _, event := range activeEvents {
+			if taskTitlesToRemove[event.Title] && event.Status == database.TaskNotdone {
+				tasksToBeRemoved++
+			}
+		}
+
+		// If there are tasks to remove, update the task completion map
+		if tasksToBeRemoved > 0 {
+			// Get singleton instance of TaskCompletionMap
+			taskCompletionInstance := database.GetTaskCompletionMapInstance(nil, cm)
+
+			// Get current task info and update it
+			// We need to do this before deleting the event to preserve the completion count
+			aggregatedEvents, err := repos.ActiveEvents.GetAggregatedEventStatus()
+			if err == nil {
+				for _, event := range aggregatedEvents {
+					if event.EventNumber == request.EventNumber {
+						// Calculate new total after removing tasks
+						newTotal := event.Total - tasksToBeRemoved
+						if newTotal < 0 {
+							newTotal = 0
+						}
+
+						// Add the event with updated counts
+						// This will overwrite the existing event in the map
+						taskCompletionInstance.AddNewEvent(request.EventNumber, newTotal)
+						break
+					}
+				}
+			}
+
+			// Delete all tasks for this event
+			err = repos.ActiveEvents.DeleteEvent(request.EventNumber, actualOverview.CentralId)
+			if err != nil {
+				log.Errorf("Error deleting event tasks: %s\n", err)
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "Failed to delete event tasks",
+				})
+			}
+
+			// Re-add tasks that should remain after de-escalation
+			var tasksToKeep []database.Task
+			for _, event := range activeEvents {
+				if !taskTitlesToRemove[event.Title] || event.Status != database.TaskNotdone {
+					// Convert ActiveEvents back to Task
+					task := database.Task{
+						Priority:        event.Priority,
+						Title:           event.Title,
+						Description:     event.Description,
+						Role:            event.Role,
+						Category:        actualOverview.Type,
+						EscalationLevel: event.EscalationLevel,
+					}
+					tasksToKeep = append(tasksToKeep, task)
+				}
+			}
+
+			// Re-add the tasks that should remain
+			if len(tasksToKeep) > 0 {
+				err = repos.ActiveEvents.CreateFromTaskList(tasksToKeep, request.EventNumber, actualOverview.CentralId)
+				if err != nil {
+					log.Errorf("Error re-adding tasks: %s\n", err)
+					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+						"error": "Failed to re-add tasks",
+					})
+				}
+			}
+		}
+
 		// Return success response
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"message": "Event level deescalated successfully",
+			"message": "Event level de-escalated successfully",
 		})
 	}
 }
