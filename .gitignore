@@ -111,3 +111,6 @@ config.toml
 
 # DB folder
 #/db/
+
+# Static frontend serving
+/frontend/

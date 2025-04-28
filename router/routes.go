@@ -17,6 +17,9 @@ import (
 func SetupRoutes(app *fiber.App, config config.Config, repos *database.Repositories, cm *broadcast.ConnectionManager) {
 	app.Get("/", handlers.HomeHandler)
 
+	// Serve the SolidJS app from a specific directory
+	app.Static("/app", "./frontend/dist")
+
 	// api group
 	api := app.Group("/api")
 

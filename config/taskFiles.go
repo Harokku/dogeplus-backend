@@ -18,13 +18,23 @@ func LoadExcelFile(config Config, filename string) (*excelize.File, error) {
 		return nil, fmt.Errorf("TASKROOT is not set in config.toml or environment variables")
 	}
 
+	// Clean the task root path
+	taskRoot = filepath.Clean(taskRoot)
+
 	// Default extension handling
 	defaultExt := ".xlsx"
 	if filepath.Ext(filename) == "" {
 		filename += defaultExt
 	}
 
-	filePath := filepath.Join(taskRoot, filename)
+	// Clean the filename and ensure it doesn't contain path separators
+	cleanFilename := filepath.Base(filename)
+	if cleanFilename != filename {
+		return nil, fmt.Errorf("filename should not contain path separators: %s", filename)
+	}
+
+	// Join paths using the platform-specific separator
+	filePath := filepath.Join(taskRoot, cleanFilename)
 	if err := SanitizeFilePath(filePath); err != nil {
 		return nil, fmt.Errorf("file path validation failed: %v", err)
 	}

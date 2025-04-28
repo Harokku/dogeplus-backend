@@ -104,8 +104,19 @@ func SanitizeFilePath(path string) error {
 	cleanPath := filepath.Clean(path)
 
 	// check if path is absolute to prevent path traversal and ensure it doesn't traverse root
-	if !filepath.IsAbs(cleanPath) || strings.Contains(cleanPath, ".."+string(filepath.Separator)) {
-		return fmt.Errorf(`"%s" is not an absolute path or contains traversal`, path)
+	//if !filepath.IsAbs(cleanPath) || strings.Contains(cleanPath, ".."+string(filepath.Separator)) {
+	//	return fmt.Errorf(`"%s" is not an absolute path or contains traversal`, path)
+	//}
+
+	// Convert to absolute path if not already
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf(`failed to get absolute path for "%s": %v`, path, err)
+	}
+
+	// Check for path traversal attempts using platform-specific separator
+	if strings.Contains(absPath, ".."+string(filepath.Separator)) {
+		return fmt.Errorf(`"%s" contains path traversal`, path)
 	}
 
 	// Detect and reject any null bytes in the file path
@@ -118,7 +129,7 @@ func SanitizeFilePath(path string) error {
 		return fmt.Errorf(`"%s" does not exist`, path)
 	}
 
-	// Check if the program has sufficient permission to access the file
+	// Check if the program has enough permission to access the file
 	file, err := os.Open(cleanPath)
 	defer file.Close()
 	if err != nil {
