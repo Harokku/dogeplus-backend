@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"slices"
+	"time"
 )
 
 type taskCompletionInfo struct {
@@ -272,6 +273,28 @@ func PostEscalate(repos *database.Repositories, confg config.Config, cm *broadca
 			taskCompletionInstance.AddMultipleNotDoneTasks(request.EventNumber, len(filteredTasks))
 		}
 
+		// Build response map for both HTTP response and broadcast
+		overviewBroadcastMsg := fiber.Map{
+			"message": "Overview added successfully",
+			"data": fiber.Map{
+				"event_number":   actualOverview.EventNumber,
+				"central_id":     actualOverview.CentralId,
+				"type":           actualOverview.Type,
+				"level":          request.NewLevel,
+				"incident_level": request.IncidentLevel,
+				"timestamp":      time.Now(),
+			},
+		}
+
+		// Convert the broadcast message to JSON
+		broadcastResponseJson, err := json.Marshal(overviewBroadcastMsg)
+		if err != nil {
+			log.Errorf("Failed to marshal overview to JSON: %v\n", err)
+		} else {
+			// Broadcast to the "event_updates" topic
+			cm.BroadcastToTopic("event_updates", broadcastResponseJson)
+		}
+
 		// Return success response
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"message": "Event level escalated successfully",
@@ -453,6 +476,28 @@ func PostDeEscalate(repos *database.Repositories, confg config.Config, cm *broad
 					})
 				}
 			}
+		}
+
+		// Build response map for both HTTP response and broadcast
+		overviewBroadcastMsg := fiber.Map{
+			"message": "Overview added successfully",
+			"data": fiber.Map{
+				"event_number":   actualOverview.EventNumber,
+				"central_id":     actualOverview.CentralId,
+				"type":           actualOverview.Type,
+				"level":          request.NewLevel,
+				"incident_level": request.IncidentLevel,
+				"timestamp":      time.Now(),
+			},
+		}
+
+		// Convert the broadcast message to JSON
+		broadcastResponseJson, err := json.Marshal(overviewBroadcastMsg)
+		if err != nil {
+			log.Errorf("Failed to marshal overview to JSON: %v\n", err)
+		} else {
+			// Broadcast to the "event_updates" topic
+			cm.BroadcastToTopic("event_updates", broadcastResponseJson)
 		}
 
 		// Return success response
