@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/xuri/excelize/v2"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -246,7 +247,7 @@ func (t *TaskRepository) GetGyCategoryAndEscalationLevel(category, startingEscal
 }
 
 // executeAndScanResults executes the given SQL query with the provided arguments,
-// scans the resulting rows and returns an array of Task objects and an error.
+// scans the resulting rows, and returns an array of Task objects and an error.
 // It takes a query string and an array of interface{} for the arguments as input.
 // A query is executed against the database connection with the given query and arguments.
 // The retrieved rows are scanned and transformed into Task objects,
@@ -441,21 +442,13 @@ var incidentLevels = map[string]int{
 	"rossa":  4,
 }
 
-// FilterTasks filters the provided tasks based on category, escalation level, and incident level.
-//
-// Parameters:
-// - tasks: A slice of Task structs to filter.
-// - category: The category to filter by. Tasks must match this category or be "pro22" (case insensitive).
-// - escalationLevel: The maximum escalation level to allow, incrementally ranked as "allarme", "emergenza", "incidente".
-// - incidentLevel: The maximum incident level to allow when the escalation level is "incidente", incrementally ranked as "bianca", "verde", "gialla", "rossa".
-//
-// Returns:
-// - A slice of Task structs that meet the filter criteria.
+// FilterTasks filters and sorts tasks based on category, escalation, and incident levels criteria.
+// It removes duplicates by keeping tasks with higher escalation/incident levels for the same title.
 func FilterTasks(tasks []Task, category, escalationLevel, incidentLevel string) []Task {
 	var filteredTasks []Task
 
 	for _, task := range tasks {
-		// Check if the task's category matches the input category or "pro22" (case insensitive).
+		// Check if the task's category matches the input category or "pro22" (case-insensitive).
 		if strings.EqualFold(task.Category, category) || strings.EqualFold(task.Category, "pro22") {
 			// Ensure the task's escalation level is less than or equal to the input escalation level.
 			if escalationLevels[task.EscalationLevel] <= escalationLevels[escalationLevel] {
@@ -472,6 +465,37 @@ func FilterTasks(tasks []Task, category, escalationLevel, incidentLevel string) 
 			}
 		}
 	}
+
+	// Create a map to store tasks by title, keeping only the one with higher escalation/incident level
+	tasksByTitle := make(map[string]Task)
+	for _, task := range filteredTasks {
+		if existingTask, exists := tasksByTitle[task.Title]; exists {
+			// Compare escalation levels
+			if escalationLevels[task.EscalationLevel] > escalationLevels[existingTask.EscalationLevel] {
+				tasksByTitle[task.Title] = task
+			} else if escalationLevels[task.EscalationLevel] == escalationLevels[existingTask.EscalationLevel] {
+				// If same escalation level and it's "incidente", compare incident levels
+				if strings.EqualFold(task.EscalationLevel, "incidente") {
+					if incidentLevels[task.IncidentLevel] > incidentLevels[existingTask.IncidentLevel] {
+						tasksByTitle[task.Title] = task
+					}
+				}
+			}
+		} else {
+			tasksByTitle[task.Title] = task
+		}
+	}
+
+	// Convert map back to slice
+	filteredTasks = make([]Task, 0, len(tasksByTitle))
+	for _, task := range tasksByTitle {
+		filteredTasks = append(filteredTasks, task)
+	}
+
+	// Sort by Priority
+	sort.Slice(filteredTasks, func(i, j int) bool {
+		return filteredTasks[i].Priority < filteredTasks[j].Priority
+	})
 
 	return filteredTasks
 }
