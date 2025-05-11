@@ -2,6 +2,12 @@
 // It defines repositories for managing different types of data (tasks, active events, etc.),
 // includes functions for connecting to the database, creating tables, and performing CRUD operations,
 // and provides utilities for data aggregation, filtering, and merging.
+//
+// This file contains functionality related to tasks management:
+// - Task data structure
+// - TaskRepository for database operations
+// - Excel file parsing
+// - Task filtering and merging utilities
 package database
 
 import (
@@ -9,26 +15,13 @@ import (
 	"dogeplus-backend/config"
 	"errors"
 	"fmt"
-	"github.com/xuri/excelize/v2"
-	"log"
 	"sort"
-	"strconv"
 	"strings"
 )
 
-const PRO22 = "pro22"
-
-// Task represents a task with its properties.
-type Task struct {
-	ID              int    `json:"ID,omitempty"`
-	Priority        int    `json:"priority,omitempty"`
-	Title           string `json:"title,omitempty"`
-	Description     string `json:"description,omitempty"`
-	Role            string `json:"role,omitempty"`
-	Category        string `json:"category,omitempty"`
-	EscalationLevel string `json:"escalation_level,omitempty"`
-	IncidentLevel   string `json:"incident_level,omitempty"`
-}
+// ==================================================================================
+// CONSTANTS AND DATA STRUCTURES
+// ==================================================================================
 
 // TaskRepository represents a repository for managing tasks.
 type TaskRepository struct {
@@ -124,10 +117,7 @@ func (t *TaskRepository) GetByCategories(category string) ([]Task, error) {
 	args := []interface{}{category, "PRO22"}
 
 	// Construct the query using the placeholders
-	query := fmt.Sprintf(`SELECT id, priority, title, description, role, category, escalation_level, incident_level 
-	                      FROM tasks 
-	                      WHERE category IN (%s) 
-	                      ORDER BY priority`, placeholders)
+	query := "SELECT id, priority, title, description, role, category, escalation_level, incident_level FROM tasks WHERE category IN (" + placeholders + ") ORDER BY priority"
 
 	// Execute the query and scan the results
 	return t.executeAndScanResults(query, args)
@@ -154,7 +144,7 @@ func (t *TaskRepository) GetByCategoriesAndEscalationLevels(categories []string,
 		escPlaceholders[i] = "?"
 		args[i+len(categories)] = escalation
 	}
-	query := fmt.Sprintf(`SELECT id, priority, title, description, role, category, escalation_level FROM tasks WHERE category IN (%s) AND escalation_level IN (%s) ORDER BY priority`,
+	query := fmt.Sprintf("SELECT id, priority, title, description, role, category, escalation_level FROM tasks WHERE category IN (%s) AND escalation_level IN (%s) ORDER BY priority",
 		strings.Join(catPlaceholders, ","), strings.Join(escPlaceholders, ","))
 
 	return t.executeAndScanResults(query, args)
@@ -326,120 +316,6 @@ func (trx *TaskRepositoryTransaction) DropTasksTable() error {
 
 func (trx *TaskRepositoryTransaction) BulkAdd(tasks []Task) error {
 	return trx.repo.BulkAdd(trx.Tx, tasks)
-}
-
-// parsePriority converts a priority string to an int, returns 0 if invalid.
-// It logs a warning if the conversion fails but does not halt execution.
-func parsePriority(priority string) int {
-	priorityInt, err := strconv.Atoi(priority)
-	if err != nil {
-		log.Printf("failed to parse priority: %v", err)
-		return 0
-	}
-	return priorityInt
-}
-
-// isBlockEmpty checks if a block of 5 columns is empty
-func isBlockEmpty(block []string) bool {
-	for _, cell := range block {
-		if cell != "" {
-			return false
-		}
-	}
-	return true
-}
-
-// padBlock ensures a block has exactly 'blockSize' columns by appending empty strings if necessary.
-func padBlock(block []string, blockSize int) []string {
-	if len(block) >= blockSize {
-		return block
-	}
-	paddedBlock := make([]string, blockSize)
-	copy(paddedBlock, block)
-	return paddedBlock
-}
-
-// ParseXLSXToTasks converts an Excel file into a slice of Task instances, parsing data from each sheet and handling errors.
-func ParseXLSXToTasks(f *excelize.File) ([]Task, error) {
-	var tasks []Task
-
-	// Check if the file has any sheets
-	sheetList := f.GetSheetList()
-	if len(sheetList) == 0 {
-		return nil, fmt.Errorf("the file does not contain any sheets")
-	}
-
-	// Iterate over each sheet in the file
-	for _, sheetName := range sheetList {
-		// Get all the rows from the current sheet
-		rows, err := f.GetRows(sheetName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get rows from sheet %s: %v", sheetName, err)
-		}
-
-		// Fetch the header row roles
-		if len(rows) < 3 {
-			return nil, fmt.Errorf("the sheet %s does not have the required structure (at least 3 rows needed)", sheetName)
-		}
-
-		headerRow := rows[0]
-
-		// Iterate over each row in the sheet, skipping the first 2 rows
-		for i, row := range rows {
-			if i < 2 {
-				continue // Skip the first 2 rows
-			}
-
-			// Iterate in blocks of 5 columns starting from the first block
-			for j := 0; j < len(row); j += 5 {
-				// Ensure there's a block to process
-				block := row[j:min(j+5, len(row))]
-
-				// Pad the block to ensure it has exactly 5 columns
-				block = padBlock(block, 5)
-
-				// Skip if the block is empty
-				if isBlockEmpty(block) {
-					continue
-				}
-
-				// Fetch the role from the header row based on the block's starting column
-				role := ""
-				if j < len(headerRow) {
-					role = headerRow[j]
-				}
-
-				// Create a new Task struct with mapped fields
-				task := Task{
-					Category:        sheetName,
-					Role:            role,
-					Priority:        parsePriority(block[0]),   // Convert and map the priority
-					Title:           block[1],                  // Map the title field
-					Description:     block[2],                  // Map the description field
-					EscalationLevel: strings.ToLower(block[3]), // Map the escalation level field
-					IncidentLevel:   strings.ToLower(block[4]), // Map the incident level field
-				}
-
-				// Append the new task to the tasks slice
-				tasks = append(tasks, task)
-			}
-		}
-	}
-
-	return tasks, nil
-}
-
-var escalationLevels = map[string]int{
-	"allarme":   1,
-	"emergenza": 2,
-	"incidente": 3,
-}
-
-var incidentLevels = map[string]int{
-	"bianca": 1,
-	"verde":  2,
-	"gialla": 3,
-	"rossa":  4,
 }
 
 // FilterTasks filters and sorts tasks based on category, escalation, and incident levels criteria.

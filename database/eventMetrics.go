@@ -223,11 +223,6 @@ var rankedLevels = map[Level]int{
 	Incidente: 3,
 }
 
-// GetEscalationLevels returns a slice of strings representing different levels of escalation.
-func GetEscalationLevels() []string {
-	return []string{"allarme", "emergenza", "incidente"}
-}
-
 // EscalationLevels is a struct type that represents a set of escalation levels for different event numbers.
 // It has one field 'Levels' which is a map that stores the event numbers as keys and their respective escalation levels as values.
 // Level is a string type used to represent different levels of allowed escalation or incident severity.
